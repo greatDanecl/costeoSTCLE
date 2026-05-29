@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
-from plotly.subplots import make_subplots
 import base64
 from pathlib import Path
 
@@ -17,9 +15,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ─────────────────────────────────────────────
-# PALETA Y ESTILOS
-# ─────────────────────────────────────────────
 ROJO   = "#C8102E"
 AZUL   = "#1B2A6B"
 AZUL_C = "#2E4BAD"
@@ -28,21 +23,44 @@ BLANCO = "#FFFFFF"
 VERDE  = "#1A7A4A"
 AMBAR  = "#D97706"
 
+# ─────────────────────────────────────────────
+# CSS — fix sidebar: solo labels blancos, inputs con fondo blanco/texto oscuro
+# ─────────────────────────────────────────────
 st.markdown(f"""
 <style>
-  /* Fondo general */
   .stApp {{ background-color: {GRIS}; }}
 
-  /* Sidebar */
+  /* Sidebar fondo */
   [data-testid="stSidebar"] {{ background-color: {AZUL}; }}
-  [data-testid="stSidebar"] * {{ color: white !important; }}
-  [data-testid="stSidebar"] .stNumberInput label,
-  [data-testid="stSidebar"] .stSelectbox label,
-  [data-testid="stSidebar"] .stSlider label {{ color: #CBD5F5 !important; }}
 
-  /* Títulos */
+  /* Solo los LABELS del sidebar en blanco */
+  [data-testid="stSidebar"] label,
+  [data-testid="stSidebar"] .stMarkdown p,
+  [data-testid="stSidebar"] h2,
+  [data-testid="stSidebar"] h3,
+  [data-testid="stSidebar"] h4,
+  [data-testid="stSidebar"] .stCaption,
+  [data-testid="stSidebar"] .stMetricLabel,
+  [data-testid="stSidebar"] .stMetricValue
+    {{ color: #E8ECF8 !important; }}
+
+  /* Inputs del sidebar: fondo blanco, texto oscuro */
+  [data-testid="stSidebar"] input[type="number"],
+  [data-testid="stSidebar"] input[type="text"] {{
+    background-color: #FFFFFF !important;
+    color: #111827 !important;
+    border: 1px solid #6B80C4 !important;
+    border-radius: 6px !important;
+  }}
+  [data-testid="stSidebar"] .stNumberInput div[data-baseweb="input"] {{
+    background-color: #FFFFFF !important;
+  }}
+  /* Slider track */
+  [data-testid="stSidebar"] .stSlider {{ filter: brightness(1.3); }}
+
+  /* Títulos área principal */
   h1 {{ color: {AZUL}; font-family: 'Segoe UI', sans-serif; }}
-  h2, h3 {{ color: {AZUL}; }}
+  h2, h3, h4 {{ color: {AZUL}; }}
 
   /* Cards métricas */
   .metric-card {{
@@ -56,8 +74,6 @@ st.markdown(f"""
   .metric-card .label {{ font-size:12px; color:#6B7280; text-transform:uppercase; letter-spacing:.5px; }}
   .metric-card .value {{ font-size:22px; font-weight:700; color:{AZUL}; }}
   .metric-card .delta {{ font-size:13px; margin-top:2px; }}
-  .delta-pos {{ color:{VERDE}; }}
-  .delta-neg {{ color:{ROJO}; }}
 
   /* Header banner */
   .header-banner {{
@@ -73,12 +89,6 @@ st.markdown(f"""
   .header-banner h1 {{ color: white !important; margin:0; font-size:22px; }}
   .header-banner p  {{ color: #CBD5F5; margin:0; font-size:13px; }}
 
-  /* Tabla */
-  .stDataFrame {{ border-radius: 8px; }}
-
-  /* Expander */
-  .streamlit-expanderHeader {{ background: {BLANCO}; border-radius:8px; color:{AZUL} !important; }}
-
   /* Section divider */
   .section-title {{
     font-size:15px; font-weight:700; color:{AZUL};
@@ -88,12 +98,31 @@ st.markdown(f"""
   }}
 
   /* Badge */
-  .badge {{
-    display:inline-block; padding:2px 10px;
-    border-radius:12px; font-size:11px; font-weight:600;
+  .badge {{ display:inline-block; padding:2px 10px; border-radius:12px; font-size:11px; font-weight:600; }}
+  .badge-rec {{ background:#DBEAFE; color:#1E40AF; }}
+  .badge-one {{ background:#FEE2E2; color:#991B1B; }}
+
+  /* Caja beneficio */
+  .ben-box {{
+    background:{BLANCO};
+    border-radius:10px;
+    padding:14px 18px;
+    margin-bottom:10px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.07);
+    border-top: 3px solid {AZUL};
   }}
-  .badge-recurrente {{ background:#DBEAFE; color:#1E40AF; }}
-  .badge-onetime    {{ background:#FEE2E2; color:#991B1B; }}
+  .ben-title {{ font-weight:700; color:{AZUL}; font-size:14px; }}
+  .ben-nota  {{ font-size:11px; color:#6B7280; margin-top:2px; }}
+
+  /* Costo card inline */
+  .cost-display {{
+    background: {GRIS};
+    border-radius:8px;
+    padding:10px 14px;
+    border-left:4px solid {AZUL};
+  }}
+  .cost-display .lbl {{ font-size:11px; color:#6B7280; }}
+  .cost-display .val {{ font-size:18px; font-weight:700; color:{AZUL}; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -114,689 +143,804 @@ st.markdown(f"""
   {logo_html}
   <div>
     <h1>Modelo de Costeo · Contrato Colectivo STCLE</h1>
-    <p>Sindicato de Tripulantes de Cabina LAN Express · Vigencia 01/09/2023 – 31/08/2026</p>
+    <p>Sindicato de Tripulantes de Cabina LAN Express &nbsp;·&nbsp; Vigencia 01/09/2023 – 31/08/2026</p>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-# SIDEBAR — PARÁMETROS GLOBALES
+# SIDEBAR
 # ─────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## ⚙️ Parámetros Globales")
+    st.markdown("---")
 
-    st.markdown("### 💱 Tipo de Cambio")
+    st.markdown("#### 💱 Tipo de Cambio")
     tc_usd = st.number_input("CLP / USD", value=980, step=5, min_value=700, max_value=1500)
 
-    st.markdown("### 📅 Horizonte de Análisis")
+    st.markdown("#### 📅 Horizonte")
     anios = st.slider("Años del contrato", 1, 3, 3)
 
-    st.markdown("### 📈 Incremento Real (% anual)")
-    st.caption("Aplica sobre conceptos definidos por contrato (excluye IPC)")
-    inc_real_pct = st.number_input("Incremento real %", value=1.0, step=0.5, min_value=0.0, max_value=10.0)
+    st.markdown("#### 📈 Incremento Real (% anual)")
+    st.caption("Sobre HV y SB según contrato. Excluye IPC.")
+    inc_real_pct = st.number_input("Incremento real %", value=1.0, step=0.5,
+                                    min_value=0.0, max_value=10.0)
 
-    st.markdown("### 👥 Dotación por Subcategoría")
-    st.caption("Número de trabajadores por categoría")
-
-    n_trainee  = st.number_input("TC Trainee",       value=10, min_value=0, step=1)
-    n_tcj      = st.number_input("TC Junior",         value=25, min_value=0, step=1)
-    n_tc       = st.number_input("TC Senior (TC)",    value=60, min_value=0, step=1)
-    n_tcs      = st.number_input("TC Senior (TCs)",   value=45, min_value=0, step=1)
-    n_jsab     = st.number_input("Jefe Servicio AB",  value=35, min_value=0, step=1)
-    n_jsabs    = st.number_input("Jefe SA Bordo Sr",  value=18, min_value=0, step=1)
-
-    total_dot  = n_trainee + n_tcj + n_tc + n_tcs + n_jsab + n_jsabs
+    st.markdown("---")
+    st.markdown("#### 👥 Dotación por Subcategoría")
+    n_trainee = st.number_input("TC Trainee",      value=10,  min_value=0, step=1)
+    n_tcj     = st.number_input("TC Junior",        value=25,  min_value=0, step=1)
+    n_tc      = st.number_input("TC (Senior)",      value=60,  min_value=0, step=1)
+    n_tcs     = st.number_input("TC Senior (TCs)",  value=45,  min_value=0, step=1)
+    n_jsab    = st.number_input("Jefe SAB",         value=35,  min_value=0, step=1)
+    n_jsabs   = st.number_input("Jefe SAB Senior",  value=18,  min_value=0, step=1)
+    total_dot = n_trainee + n_tcj + n_tc + n_tcs + n_jsab + n_jsabs
     st.metric("Total dotación", total_dot)
 
-    st.markdown("### ✈️ Productividad (hrs vuelo/mes promedio)")
-    hv_trainee = st.number_input("HV/mes TC Trainee",  value=55.0, step=1.0)
-    hv_tcj     = st.number_input("HV/mes TC Junior",   value=57.0, step=1.0)
-    hv_tc      = st.number_input("HV/mes TC",          value=60.0, step=1.0)
-    hv_tcs     = st.number_input("HV/mes TCs",         value=62.0, step=1.0)
-    hv_jsab    = st.number_input("HV/mes JSAB",        value=60.0, step=1.0)
-    hv_jsabs   = st.number_input("HV/mes JSABs",       value=60.0, step=1.0)
+    st.markdown("---")
+    st.markdown("#### ✈️ Productividad (HV/mes promedio)")
+    hv_trainee = st.number_input("HV/mes Trainee",  value=55.0, step=1.0)
+    hv_tcj     = st.number_input("HV/mes TCj",      value=57.0, step=1.0)
+    hv_tc      = st.number_input("HV/mes TC",       value=60.0, step=1.0)
+    hv_tcs     = st.number_input("HV/mes TCs",      value=62.0, step=1.0)
+    hv_jsab    = st.number_input("HV/mes JSAB",     value=60.0, step=1.0)
+    hv_jsabs   = st.number_input("HV/mes JSABs",    value=60.0, step=1.0)
 
 # ─────────────────────────────────────────────
-# DATOS BASE DEL CONTRATO (valores a la firma, sep-2023)
+# DATOS BASE
 # ─────────────────────────────────────────────
+HV_BASE = {"TC Trainee": 3579, "TC Junior": 3937, "TC": 7119,
+           "TCs": 11051, "JSAB": 16018, "JSABs": 19871}
+SB_BASE = {"TC Trainee": 500000, "TC Junior": 460000, "TC": 460000,
+           "TCs": 460000, "JSAB": 483575, "JSABs": 559136}
 
-# Valores hora de vuelo (brutos CLP, referencia firma)
-HV = {
-    "TC Trainee": 3579,
-    "TC Junior":  3937,
-    "TC":         7119,
-    "TCs":        11051,
-    "JSAB":       16018,
-    "JSABs":      19871,
-}
+dotacion = {"TC Trainee": n_trainee, "TC Junior": n_tcj, "TC": n_tc,
+            "TCs": n_tcs, "JSAB": n_jsab, "JSABs": n_jsabs}
+hv_mes   = {"TC Trainee": hv_trainee, "TC Junior": hv_tcj, "TC": hv_tc,
+            "TCs": hv_tcs, "JSAB": hv_jsab, "JSABs": hv_jsabs}
+subcat   = list(HV_BASE.keys())
 
-# Sueldo base mensual (brutos CLP)
-SB = {
-    "TC Trainee": 500000,   # aprox. IMM 2023
-    "TC Junior":  460000,
-    "TC":         460000,
-    "TCs":        460000,
-    "JSAB":       483575,
-    "JSABs":      559136,
-}
+def factor_inc(yr, pct): return (1 + pct/100) ** yr
 
-# Dotaciones del sidebar
-dotacion = {
-    "TC Trainee": n_trainee,
-    "TC Junior":  n_tcj,
-    "TC":         n_tc,
-    "TCs":        n_tcs,
-    "JSAB":       n_jsab,
-    "JSABs":      n_jsabs,
-}
-
-hv_mes = {
-    "TC Trainee": hv_trainee,
-    "TC Junior":  hv_tcj,
-    "TC":         hv_tc,
-    "TCs":        hv_tcs,
-    "JSAB":       hv_jsab,
-    "JSABs":      hv_jsabs,
-}
-
-subcat_list = list(HV.keys())
+def cagr(ini, fin, n):
+    if ini <= 0 or n == 0: return 0.0
+    return ((fin/ini)**(1/n) - 1) * 100
 
 # ─────────────────────────────────────────────
-# HELPER: aplicar incremento real acumulado por año
-# ─────────────────────────────────────────────
-def factor_inc(anio, pct):
-    """Factor multiplicador con incremento real anual. Año 0 = base."""
-    return (1 + pct/100) ** anio
-
-# ─────────────────────────────────────────────
-# DEFINICIÓN DE BENEFICIOS
-# Estructura: cada beneficio tiene:
-#   nombre, cláusula, tipo (recurrente/one-time),
-#   sujeto_incremento (bool), formula(params) -> CLP/año
-# ─────────────────────────────────────────────
-
-def costo_hora_vuelo_anual(hv_dict_nuevo=None):
-    """Costo total anual por horas de vuelo (piso 55 hrs garantizado)."""
-    hv_use = hv_dict_nuevo if hv_dict_nuevo else HV
-    total = 0
-    for sc in subcat_list:
-        hv_real = max(hv_mes[sc], 55)
-        total += hv_use[sc] * hv_real * 12 * dotacion[sc]
-    return total
-
-def costo_sueldo_base_anual(sb_dict_nuevo=None):
-    sb_use = sb_dict_nuevo if sb_dict_nuevo else SB
-    total = 0
-    for sc in subcat_list:
-        total += sb_use[sc] * 12 * dotacion[sc]
-    return total
-
-# ─────────────────────────────────────────────
-# TABS PRINCIPALES
+# TABS
 # ─────────────────────────────────────────────
 tab1, tab2, tab3, tab4 = st.tabs([
     "📊 Costeo por Beneficio",
     "📈 Evolución Anual & CAGR",
     "🔬 Simulador Nuevo Contrato",
-    "📋 Resumen Ejecutivo"
+    "📋 Resumen Ejecutivo",
 ])
 
 # ══════════════════════════════════════════════
 # TAB 1 — COSTEO POR BENEFICIO
+# Cada beneficio tiene inputs editables:
+#   - Valor unitario actual / nuevo  (CLP o USD)
+#   - Cantidad / frecuencia actual / nueva  (ej. eventos/mes, % personas, nº hijos)
+# El costo = f(valor, cantidad, dotación)
 # ══════════════════════════════════════════════
 with tab1:
-    st.markdown('<div class="section-title">Variables Remuneracionales — Contrato Colectivo STCLE · LanExpress</div>', unsafe_allow_html=True)
-    st.caption("Ajusta los valores actuales y nuevos para cada beneficio. El costo anual se calcula automáticamente.")
+    st.markdown('<div class="section-title">Variables Remuneracionales — Ajuste Actual vs. Nuevo</div>',
+                unsafe_allow_html=True)
+    st.caption("Cada beneficio expone sus parámetros editables. "
+               "Columna **Actual** = contrato vigente · Columna **Nuevo** = propuesta. "
+               "El costo anual se recalcula en tiempo real.")
 
-    # ── Construir tabla de beneficios editable ──
-    # Definimos todos los beneficios extraídos del contrato
+    nuevos_valores = {}  # {bid: {nombre, clausula, recurrente, costo_actual, costo_nuevo, suj_inc}}
 
-    beneficios_def = [
-        # (id, nombre, cláusula, recurrente, unidad, cant_actual, val_unit_actual, cant_nueva, val_unit_nueva, sujeto_inc_real, notas)
-        # REMUNERACIONES DIRECTAS
-        ("hv",        "Horas de Vuelo",                     "Cláusula 26",  True,  "HV×dotación×12", None, None, None, None, True,  "Calculado desde dotación y HV/mes por subcategoría"),
-        ("sb",        "Sueldo Base",                         "Cláusula 26",  True,  "SB×dotación×12", None, None, None, None, True,  "Sueldo base fijo mensual × dotación"),
-        ("gratif",    "Gratificación Legal (25% rem.)",      "Cláusula 4",   True,  "% rem.",         None, None, None, None, True,  "25% remuneración mensual legal, tope 4.75 IMM"),
-        # BONOS RECURRENTES
-        ("asist",     "Bono 100% Asistencia",                "Cláusula 28a", True,  "CLP/mes/persona",169349, None, 169349, None, False, "Se asume 85% de trabajadores lo perciben"),
-        ("fiestas",   "Bono Fiestas Patrias",                "Cláusula 28b", True,  "CLP/persona",   138983, None, 138983, None, False, "Pago septiembre. Incluye 30% por hijo (prom. 0.8 hijos)"),
-        ("navidad",   "Bono Navidad",                        "Cláusula 28c", True,  "CLP/persona",   169872, None, 169872, None, False, "Pago diciembre. Incluye 30% por hijo (prom. 0.8 hijos)"),
-        ("bono_des",  "Bono Desempeño (TC promedio)",        "Cláusula 37",  True,  "CLP/persona",   405337, None, 405337, None, False, "Pago julio. Se asume 60% 'cumple esperado', 30% 'sobre esperado'"),
-        ("bono_prod", "Bono Productividad (factor 1.0)",     "Cláusula 37",  True,  "CLP/persona",   674602, None, 674602, None, False, "Pago marzo. JSAB: $1.180.556. Asume 100% cumplimiento."),
-        # BONOS OPERACIONALES (por evento)
-        ("psvnc",     "Bono Noche Consecutiva (PSVNC)",      "Cláusula 17/1.5", True,  "CLP/evento",  52094, None,  52094, None, False, "Máx. 2 eventos/mes programados. Estimado: 1.5 eventos/mes/persona"),
-        ("ext_psv",   "Bono Extensión PSV 12→14h (1er evt)", "Cláusula 23",  True,  "CLP/evento",   79029, None,  79029, None, False, "Estimado: 0.5 eventos/mes/persona"),
-        ("cambio_v",  "Bono Cambio de Vuelo",                "Cláusula 13d", True,  "CLP/evento",  119819, None, 119819, None, False, "Estimado: 0.3 eventos/mes/persona"),
-        ("cancel_v",  "Bono Cancelación Vuelo (espera>3h)",  "Cláusula 13b", True,  "CLP/evento",  200469, None, 200469, None, False, "Estimado: 0.2 eventos/mes/persona"),
-        ("turno5",    "Bono 5° Turno en adelante",           "Cláusula 17/4",True,  "CLP/turno",    58608, None,  58608, None, False, "TC: $58.608 | JSAB: $97.678. Estimado: 15% trabajadores/mes"),
-        ("turno_atp", "Bono Turno Aeropuerto (1er turno)",   "Cláusula 17/4.2", True,"CLP/turno",   54700, None,  54700, None, False, "Estimado: 1 turno ATO/mes promedio por trabajador"),
-        ("pre_libre", "Bono PSV previo a día libre >22:00",  "Cláusula 17/1.6",True, "CLP/evento",  64196, None,  64196, None, False, "Estimado: 0.4 eventos/mes/persona"),
-        ("high_rank", "Diferencial High Rank Programado",    "Cláusula 16",  True,  "CLP/HV diff",  None,  None,  None,  None, False, "Diferencia HV TCs vs JSABs. Estimado 5% vuelos con HR."),
-        # ASIGNACIONES
-        ("escolar",   "Asignación Escolaridad (prom.)",      "Cláusula 29a", True,  "CLP/hijo/año", 164532, None, 164532, None, False, "EM promedio. Se asume prom. 0.8 hijos/trabajador"),
-        ("matrimon",  "Asignación Matrimonio/AUC",           "Cláusula 29b", True,  "CLP/evento",  189211, None, 189211, None, False, "Estimado: 3% dotación/año"),
-        ("nacim",     "Asignación Nacimiento/Adopción",      "Cláusula 29d", True,  "CLP/hijo",    189211, None, 189211, None, False, "Estimado: 5% dotación/año"),
-        ("fallec",    "Asignación Fallecimiento familiar",   "Cláusula 29c", True,  "CLP/evento", 1681904,None, 1681904,None, False, "Estimado: 2% dotación/año"),
-        # BENEFICIOS ESPECIALES
-        ("viatico_n", "Viáticos Nacionales (CLP/día)",       "Cláusula 8",   True,  "CLP/día/vuelo",35000,None,  35000, None, False, "Estimado: 8 días viático nacional/mes por persona"),
-        ("viatico_i", "Viáticos Internacionales (USD/día)",  "Cláusula 8",   True,  "USD/día",        50, None,     50, None, False, "Estimado: 4 días viático internacional/mes (Sudamérica)"),
-        ("moviliz",   "Movilización (asignación mensual)",   "Cláusula 18",  True,  "CLP/mes/persona",264528,None,264528,None,False, "Quienes optan por movilización propia. Estimado 60% dotación"),
-        ("bono_ant",  "Bono Antigüedad (promedio anual)",    "Cláusula 32",  True,  "% rem. al cumplir años", None, None, None, None, False, "Estimado según distribución de antigüedad de dotación"),
-        ("apv",       "APV Empresa (matching)",              "Cláusula 39",  True,  "CLP/mes/persona",10000,None,  10000, None, False, "Tope $10.000/mes. Estimado 70% adhesión"),
-        ("seguro_v",  "Seguros de Vida + Accidentes",        "Cláusula 38",  True,  "CLP/persona/año",None,None,  None,  None, False, "Prima estimada mercado: ~$80.000/año/persona"),
-        # INCREMENTO REAL (sólo aplica sobre HV y SB según contrato)
-        ("inc_real",  "Incremento Real Pactado (HV + SB)",   "Cláusula 43",  True,  "% sobre HV+SB",  1.0, None,    1.0, None, True,  "1% anual acumulativo sobre HV y Sueldo Base"),
-        # ONE-TIME
-        ("bono_term", "Bono Término Negociación Colectiva",  "Cláusula 42",  False, "CLP/persona",4200000,None,4200000,None,False, "Pago único sep-2023. NO recurrente."),
-    ]
+    # ── Helpers de renderizado ──────────────────
+    def costo_card(label_act, c_act, label_new, c_new, suj_inc):
+        delta = c_new - c_act
+        sign  = "+" if delta >= 0 else ""
+        col_d = ROJO if delta > 0 else (VERDE if delta < 0 else "#6B7280")
+        c_act_usd = c_act / tc_usd
+        c_new_usd = c_new / tc_usd
+        st.markdown(f"""
+        <div class="cost-display" style="margin-top:6px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <div class="lbl">{label_act}</div>
+              <div class="val">${c_act/1e6:.3f}M CLP</div>
+              <div style="font-size:11px;color:#9CA3AF">${c_act_usd/1e3:.1f}K USD</div>
+            </div>
+            <div>
+              <div class="lbl">{label_new}</div>
+              <div class="val" style="color:{ROJO if delta>0 else AZUL}">${c_new/1e6:.3f}M CLP</div>
+              <div style="font-size:11px;color:#9CA3AF">${c_new_usd/1e3:.1f}K USD</div>
+            </div>
+          </div>
+          <div style="margin-top:6px;font-size:12px;color:{col_d};font-weight:600">
+            Δ {sign}${delta/1e3:,.1f}K CLP/año &nbsp;·&nbsp;
+            Inc. Real aplicable: {"✅ Sí" if suj_inc else "❌ No"}
+          </div>
+        </div>""", unsafe_allow_html=True)
 
-    # Convertimos a lista editable
-    # Precalculamos costos actuales
-    def calcular_costo_anual_base(bid, val_unit, dotacion_total=total_dot):
-        """Calcula costo anual base según el tipo de beneficio."""
-        d = dotacion
+    def ben_header(nombre, clausula, recurrente, notas):
+        badge = ('<span class="badge badge-rec">Recurrente</span>'
+                 if recurrente else '<span class="badge badge-one">One-Time</span>')
+        st.markdown(f"""
+        <div style="margin-bottom:4px">
+          <span class="ben-title">{nombre}</span>
+          &nbsp;<code style="font-size:11px;background:#EEF2FF;color:{AZUL};
+                 padding:1px 6px;border-radius:4px">{clausula}</code>
+          &nbsp;{badge}
+        </div>
+        <div class="ben-nota">{notas}</div>""", unsafe_allow_html=True)
 
-        if bid == "hv":
-            return costo_hora_vuelo_anual()
-        elif bid == "sb":
-            return costo_sueldo_base_anual()
-        elif bid == "gratif":
-            # 25% rem. mensual, tope 4.75 IMM (~$500k × 4.75 = $2.375M/año)
-            # Aprox: 8.33% del costo HV + SB (equivale a 1 mes de gratif)
-            hv_total = costo_hora_vuelo_anual()
-            sb_total = costo_sueldo_base_anual()
-            return (hv_total + sb_total) * 0.0833
-        elif bid == "asist":
-            return val_unit * 12 * 0.85 * dotacion_total
-        elif bid == "fiestas":
-            factor_hijos = 1 + 0.30 * 0.8
-            return val_unit * factor_hijos * dotacion_total
-        elif bid == "navidad":
-            factor_hijos = 1 + 0.30 * 0.8
-            return val_unit * factor_hijos * dotacion_total
-        elif bid == "bono_des":
-            # Mix: 10% excepcional ($765k TC), 30% sobre esperado ($530k), 60% esperado ($405k)
-            val_tc   = 0.1*765750 + 0.3*530920 + 0.6*405337
-            val_jsab = 0.1*918900 + 0.3*612600 + 0.6*510500
-            tc_tot   = d["TC Trainee"] + d["TC Junior"] + d["TC"] + d["TCs"]
-            jsab_tot = d["JSAB"] + d["JSABs"]
-            return val_tc * tc_tot + val_jsab * jsab_tot
-        elif bid == "bono_prod":
-            val_tc   = 674602
-            val_jsab = 1180556
-            tc_tot   = d["TC Trainee"] + d["TC Junior"] + d["TC"] + d["TCs"]
-            jsab_tot = d["JSAB"] + d["JSABs"]
-            return val_tc * tc_tot + val_jsab * jsab_tot
-        elif bid == "psvnc":
-            return val_unit * 1.5 * 12 * dotacion_total
-        elif bid == "ext_psv":
-            return val_unit * 0.5 * 12 * dotacion_total
-        elif bid == "cambio_v":
-            return val_unit * 0.3 * 12 * dotacion_total
-        elif bid == "cancel_v":
-            return val_unit * 0.2 * 12 * dotacion_total
-        elif bid == "turno5":
-            # TC: $58.608, JSAB: $97.678, 15% dotación/mes
-            val_mix = (58608 * (d["TC Trainee"]+d["TC Junior"]+d["TC"]+d["TCs"]) +
-                       97678 * (d["JSAB"]+d["JSABs"])) / max(dotacion_total,1)
-            return val_mix * 0.15 * 12 * dotacion_total
-        elif bid == "turno_atp":
-            return val_unit * 12 * dotacion_total
-        elif bid == "pre_libre":
-            return val_unit * 0.4 * 12 * dotacion_total
-        elif bid == "high_rank":
-            # 5% vuelos con HR: diferencia HV TCs→JSABs × 5% HV mensual
-            diff_hv = HV["JSABs"] - HV["TCs"]
-            return diff_hv * 0.05 * 60 * 12 * (d["TCs"])
-        elif bid == "escolar":
-            return val_unit * 0.8 * dotacion_total
-        elif bid == "matrimon":
-            return val_unit * 0.03 * dotacion_total
-        elif bid == "nacim":
-            return val_unit * 0.05 * dotacion_total
-        elif bid == "fallec":
-            return val_unit * 0.02 * dotacion_total
-        elif bid == "viatico_n":
-            return val_unit * 8 * 12 * dotacion_total
-        elif bid == "viatico_i":
-            return val_unit * tc_usd * 4 * 12 * dotacion_total
-        elif bid == "moviliz":
-            return val_unit * 12 * 0.6 * dotacion_total
-        elif bid == "bono_ant":
-            # Estimado: promedio 8% remuneración para quienes cumplen años (prom. 10% dot/año)
-            rem_prom = (costo_hora_vuelo_anual() + costo_sueldo_base_anual()) / max(dotacion_total,1) / 12
-            return rem_prom * 0.50 * 0.10 * dotacion_total  # 50% prom × 10% dot
-        elif bid == "apv":
-            return val_unit * 12 * 0.70 * dotacion_total
-        elif bid == "seguro_v":
-            return 80000 * dotacion_total
-        elif bid == "inc_real":
-            # Costeamos el delta del incremento real (no el costo base)
-            hv_sb = costo_hora_vuelo_anual() + costo_sueldo_base_anual()
-            return hv_sb * (inc_real_pct / 100)  # 1er año
-        elif bid == "bono_term":
-            return val_unit * dotacion_total
-        return 0
+    # ════════════════════════════════════
+    # CATEGORÍA: REMUNERACIONES DIRECTAS
+    # ════════════════════════════════════
+    with st.expander("💼 Remuneraciones Directas", expanded=True):
 
-    # ── UI: tabla de beneficios con inputs ──
-    st.markdown("#### 💰 Ajuste de Beneficios")
+        # ── Horas de Vuelo ──────────────────────────────────
+        ben_header("Horas de Vuelo", "Cláusula 26", True,
+                   "Valor HV × max(HV_mes, 55 piso) × 12 meses × dotación por subcategoría")
+        st.markdown("**Valores de Hora de Vuelo por subcategoría (CLP bruto)**")
+        col_hdr = st.columns([2,1,1,1,1,1,1])
+        col_hdr[0].markdown("**Subcategoría**")
+        col_hdr[1].markdown("**Dotación**")
+        col_hdr[2].markdown("**HV actual**")
+        col_hdr[3].markdown("**HV nuevo**")
+        col_hdr[4].markdown("**HV/mes**")
+        col_hdr[5].markdown("**C. actual (M)**")
+        col_hdr[6].markdown("**C. nuevo (M)**")
 
-    filas = []
-    for item in beneficios_def:
-        bid, nombre, clausula, recurrente, unidad, cant_act, val_act, cant_new, val_new, suj_inc, notas = item
-        costo_actual = calcular_costo_anual_base(bid, val_act if val_act else 0)
-        filas.append({
-            "id": bid,
-            "Beneficio": nombre,
-            "Cláusula": clausula,
-            "Tipo": "Recurrente" if recurrente else "One-Time",
-            "Unidad": unidad,
-            "Costo Actual (CLP/año)": int(costo_actual),
-            "Inc. Real?": "✓" if suj_inc else "—",
-            "Notas": notas,
-        })
+        hv_act_vals, hv_new_vals = {}, {}
+        c_hv_act = c_hv_new = 0
+        for sc in subcat:
+            cols_hv = st.columns([2,1,1,1,1,1,1])
+            cols_hv[0].markdown(f"`{sc}`")
+            cols_hv[1].markdown(f"{dotacion[sc]}")
+            hv_a = cols_hv[2].number_input("", value=HV_BASE[sc], step=100,
+                                            key=f"hv_a_{sc}", label_visibility="collapsed")
+            hv_n = cols_hv[3].number_input("", value=HV_BASE[sc], step=100,
+                                            key=f"hv_n_{sc}", label_visibility="collapsed")
+            hv_real = max(hv_mes[sc], 55)
+            ca = hv_a * hv_real * 12 * dotacion[sc]
+            cn = hv_n * hv_real * 12 * dotacion[sc]
+            cols_hv[4].markdown(f"{hv_real:.0f}")
+            cols_hv[5].markdown(f"${ca/1e6:.3f}")
+            cols_hv[6].markdown(f"${cn/1e6:.3f}")
+            hv_act_vals[sc] = hv_a; hv_new_vals[sc] = hv_n
+            c_hv_act += ca; c_hv_new += cn
 
-    df_base = pd.DataFrame(filas)
+        costo_card("Costo HV Actual/año", c_hv_act, "Costo HV Nuevo/año", c_hv_new, True)
+        nuevos_valores["hv"] = dict(nombre="Horas de Vuelo", clausula="Cláusula 26",
+            recurrente=True, costo_actual=c_hv_act, costo_nuevo=c_hv_new, suj_inc=True)
+        st.markdown("---")
 
-    # ── Tabla con expanders por categoría ──
-    categorias = {
-        "💼 Remuneraciones Directas": ["hv", "sb", "gratif"],
-        "🎁 Bonos Recurrentes": ["asist", "fiestas", "navidad", "bono_des", "bono_prod"],
-        "✈️ Bonos Operacionales": ["psvnc", "ext_psv", "cambio_v", "cancel_v", "turno5", "turno_atp", "pre_libre", "high_rank"],
-        "👨‍👩‍👧 Asignaciones": ["escolar", "matrimon", "nacim", "fallec"],
-        "🏨 Beneficios en Especie": ["viatico_n", "viatico_i", "moviliz", "bono_ant", "apv", "seguro_v"],
-        "📈 Incremento Real": ["inc_real"],
-        "⚡ One-Time": ["bono_term"],
-    }
+        # ── Sueldo Base ────────────────────────────────────
+        ben_header("Sueldo Base Mensual", "Cláusula 26", True,
+                   "Sueldo base fijo × 12 meses × dotación por subcategoría")
+        col_hdr2 = st.columns([2,1,1,1,1,1])
+        col_hdr2[0].markdown("**Subcategoría**"); col_hdr2[1].markdown("**Dotación**")
+        col_hdr2[2].markdown("**SB actual**");    col_hdr2[3].markdown("**SB nuevo**")
+        col_hdr2[4].markdown("**C.Act (M)**");    col_hdr2[5].markdown("**C.Nvo (M)**")
 
-    nuevos_valores = {}  # almacenaremos overrides del usuario
+        c_sb_act = c_sb_new = 0
+        for sc in subcat:
+            cols_sb = st.columns([2,1,1,1,1,1])
+            cols_sb[0].markdown(f"`{sc}`"); cols_sb[1].markdown(f"{dotacion[sc]}")
+            sb_a = cols_sb[2].number_input("", value=SB_BASE[sc], step=5000,
+                                            key=f"sb_a_{sc}", label_visibility="collapsed")
+            sb_n = cols_sb[3].number_input("", value=SB_BASE[sc], step=5000,
+                                            key=f"sb_n_{sc}", label_visibility="collapsed")
+            ca = sb_a * 12 * dotacion[sc]; cn = sb_n * 12 * dotacion[sc]
+            cols_sb[4].markdown(f"${ca/1e6:.3f}"); cols_sb[5].markdown(f"${cn/1e6:.3f}")
+            c_sb_act += ca; c_sb_new += cn
 
-    for cat_nombre, cat_ids in categorias.items():
-        with st.expander(cat_nombre, expanded=(cat_nombre in ["💼 Remuneraciones Directas", "🎁 Bonos Recurrentes"])):
-            for item in beneficios_def:
-                bid = item[0]
-                if bid not in cat_ids:
-                    continue
-                nombre, clausula, recurrente, unidad, cant_act, val_act, cant_new, val_new, suj_inc, notas = item[1:]
-                costo_act = calcular_costo_anual_base(bid, val_act if val_act else 0)
+        costo_card("Costo SB Actual/año", c_sb_act, "Costo SB Nuevo/año", c_sb_new, True)
+        nuevos_valores["sb"] = dict(nombre="Sueldo Base", clausula="Cláusula 26",
+            recurrente=True, costo_actual=c_sb_act, costo_nuevo=c_sb_new, suj_inc=True)
+        st.markdown("---")
 
-                st.markdown(f"**{nombre}** &nbsp; `{clausula}`")
-                badge = '<span class="badge badge-recurrente">Recurrente</span>' if recurrente else '<span class="badge badge-onetime">One-Time</span>'
-                st.markdown(badge, unsafe_allow_html=True)
-                st.caption(notas)
+        # ── Gratificación ──────────────────────────────────
+        ben_header("Gratificación Legal 25%", "Cláusula 4", True,
+                   "25% remuneración mensual legal. Aprox. 1/12 del total HV+SB anual.")
+        c1g, c2g, c3g, c4g = st.columns(4)
+        pct_grat_a = c1g.number_input("% Gratif. actual", value=8.33, step=0.1,
+                                       min_value=0.0, max_value=25.0, key="grat_a")
+        pct_grat_n = c2g.number_input("% Gratif. nuevo",  value=8.33, step=0.1,
+                                       min_value=0.0, max_value=25.0, key="grat_n")
+        c_grat_act = (c_hv_act + c_sb_act) * pct_grat_a / 100
+        c_grat_new = (c_hv_new + c_sb_new) * pct_grat_n / 100
+        costo_card("Costo Gratif. Actual/año", c_grat_act, "Costo Gratif. Nuevo/año", c_grat_new, True)
+        nuevos_valores["gratif"] = dict(nombre="Gratificación Legal 25%", clausula="Cláusula 4",
+            recurrente=True, costo_actual=c_grat_act, costo_nuevo=c_grat_new, suj_inc=True)
 
-                cols = st.columns([2, 2, 2, 1])
+    # ════════════════════════════════════
+    # CATEGORÍA: BONOS RECURRENTES
+    # ════════════════════════════════════
+    with st.expander("🎁 Bonos Recurrentes", expanded=True):
 
-                with cols[0]:
-                    # Valor unit actual (si aplica)
-                    if val_act is not None:
-                        v_act = st.number_input(
-                            f"Valor unitario actual (CLP)", value=int(val_act),
-                            step=1000, key=f"va_{bid}", label_visibility="visible"
-                        )
-                    else:
-                        v_act = None
-                        st.markdown(f"**Costo actual:** `${costo_act:,.0f}`")
+        bonos_rec = [
+            ("asist",    "Bono 100% Asistencia",           "Cláusula 28a",
+             "Mensual. % trabajadores que lo perciben × valor × 12.",
+             169349, 169349, 0.85, 0.85, "% personas que perciben", True),
+            ("fiestas",  "Bono Fiestas Patrias",            "Cláusula 28b",
+             "Pago sep. Valor base + 30% por hijo. Promedio 0.8 hijos/trabajador.",
+             138983, 138983, 0.8, 0.8, "Nº hijos promedio/trabajador", False),
+            ("navidad",  "Bono Navidad",                    "Cláusula 28c",
+             "Pago dic. Valor base + 30% por hijo. Promedio 0.8 hijos/trabajador.",
+             169872, 169872, 0.8, 0.8, "Nº hijos promedio/trabajador", False),
+            ("bono_des", "Bono Desempeño TC (mix ponderado)","Cláusula 37",
+             "Pago julio. Mix: 10% excepcional, 30% sobre esperado, 60% esperado.",
+             int(0.1*765750 + 0.3*530920 + 0.6*405337),
+             int(0.1*765750 + 0.3*530920 + 0.6*405337),
+             1.0, 1.0, "Factor cobertura (1=100% dotación TC)", False),
+            ("bono_prod","Bono Productividad TC (factor 1.0)","Cláusula 37",
+             "Pago mar. Factor 1.0 (100% cumplimiento presupuesto). TC: $674.602, JSAB: $1.180.556.",
+             674602, 674602, 1.0, 1.0, "Factor de cumplimiento (0–1.2)", False),
+        ]
 
-                with cols[1]:
-                    if val_act is not None:
-                        v_new = st.number_input(
-                            f"Valor unitario nuevo (CLP)", value=int(val_act),
-                            step=1000, key=f"vn_{bid}", label_visibility="visible"
-                        )
-                    else:
-                        v_new = None
-                        st.markdown("*(calculado automáticamente)*")
+        for bid, nombre, clausula, notas, val_a_def, val_n_def, cant_a_def, cant_n_def, cant_lbl, suj_inc in bonos_rec:
+            ben_header(nombre, clausula, True, notas)
+            b1, b2, b3, b4 = st.columns(4)
 
-                with cols[2]:
-                    costo_new = calcular_costo_anual_base(bid, v_new if v_new else 0)
-                    delta = costo_new - costo_act
-                    color_d = VERDE if delta <= 0 else ROJO
-                    sign = "+" if delta > 0 else ""
-                    st.markdown(f"""
-                    <div style="background:{BLANCO};border-left:4px solid {AZUL};border-radius:6px;padding:8px 12px;margin-top:4px">
-                      <div style="font-size:11px;color:#6B7280">Costo anual actual</div>
-                      <div style="font-weight:700;color:{AZUL}">${costo_act:,.0f}</div>
-                      <div style="font-size:11px;color:{color_d};margin-top:2px">{sign}${delta:,.0f} vs nuevo</div>
-                    </div>""", unsafe_allow_html=True)
+            val_a = b1.number_input(f"Valor unit. actual (CLP)", value=val_a_def,
+                                     step=1000, key=f"va_{bid}")
+            val_n = b2.number_input(f"Valor unit. nuevo (CLP)",  value=val_n_def,
+                                     step=1000, key=f"vn_{bid}")
 
-                with cols[3]:
-                    st.markdown(f"<div style='margin-top:18px;font-size:12px;color:#6B7280'>Inc. Real:<br><b>{'✓' if suj_inc else '—'}</b></div>", unsafe_allow_html=True)
+            if bid in ("asist",):
+                cant_a = b3.number_input(f"% personas (actual, 0–1)", value=cant_a_def,
+                                          step=0.05, min_value=0.0, max_value=1.0, key=f"ca_{bid}")
+                cant_n = b4.number_input(f"% personas (nuevo, 0–1)",  value=cant_n_def,
+                                          step=0.05, min_value=0.0, max_value=1.0, key=f"cn_{bid}")
+                c_act = val_a * 12 * cant_a * total_dot
+                c_new = val_n * 12 * cant_n * total_dot
+            elif bid in ("fiestas","navidad"):
+                cant_a = b3.number_input(f"Hijos prom. actual",  value=cant_a_def,
+                                          step=0.1, min_value=0.0, key=f"ca_{bid}")
+                cant_n = b4.number_input(f"Hijos prom. nuevo",   value=cant_n_def,
+                                          step=0.1, min_value=0.0, key=f"cn_{bid}")
+                c_act = val_a * (1 + 0.30*cant_a) * total_dot
+                c_new = val_n * (1 + 0.30*cant_n) * total_dot
+            elif bid == "bono_des":
+                # Para JSAB el valor es diferente
+                val_a_jsab = b3.number_input("Valor JSAB actual (CLP)",
+                    value=int(0.1*918900+0.3*612600+0.6*510500), step=1000, key=f"va_jsab_{bid}")
+                val_n_jsab = b4.number_input("Valor JSAB nuevo (CLP)",
+                    value=int(0.1*918900+0.3*612600+0.6*510500), step=1000, key=f"vn_jsab_{bid}")
+                tc_tot = n_trainee+n_tcj+n_tc+n_tcs
+                jsab_tot = n_jsab+n_jsabs
+                c_act = val_a*tc_tot + val_a_jsab*jsab_tot
+                c_new = val_n*tc_tot + val_n_jsab*jsab_tot
+            elif bid == "bono_prod":
+                val_a_jsab2 = b3.number_input("Valor JSAB actual (CLP)",
+                    value=1180556, step=1000, key=f"va_jsab_{bid}")
+                val_n_jsab2 = b4.number_input("Valor JSAB nuevo (CLP)",
+                    value=1180556, step=1000, key=f"vn_jsab_{bid}")
+                tc_tot = n_trainee+n_tcj+n_tc+n_tcs
+                jsab_tot = n_jsab+n_jsabs
+                c_act = val_a*tc_tot + val_a_jsab2*jsab_tot
+                c_new = val_n*tc_tot + val_n_jsab2*jsab_tot
+            else:
+                c_act = val_a * cant_a * total_dot
+                c_new = val_n * cant_n * total_dot
 
-                nuevos_valores[bid] = {
-                    "nombre": nombre,
-                    "clausula": clausula,
-                    "recurrente": recurrente,
-                    "costo_actual": costo_act,
-                    "costo_nuevo": costo_new,
-                    "suj_inc": suj_inc,
-                }
-                st.markdown("---")
+            costo_card("Costo Actual/año", c_act, "Costo Nuevo/año", c_new, suj_inc)
+            nuevos_valores[bid] = dict(nombre=nombre, clausula=clausula,
+                recurrente=True, costo_actual=c_act, costo_nuevo=c_new, suj_inc=suj_inc)
+            st.markdown("---")
 
-    # ── Totales ──
+    # ════════════════════════════════════
+    # CATEGORÍA: BONOS OPERACIONALES
+    # ════════════════════════════════════
+    with st.expander("✈️ Bonos Operacionales (por evento)", expanded=False):
+
+        bonos_op = [
+            ("psvnc",    "Bono Noche Consecutiva (PSVNC)", "Cláusula 17/1.5",
+             "Por cada evento PSVNC. Estimado: frecuencia eventos/mes/persona.",
+             52094, 52094, 1.5, 1.5, "Eventos/mes/persona", False),
+            ("ext_psv",  "Bono Extensión PSV 12→14h",      "Cláusula 23",
+             "1er evento: $79.029; 2do: $39.516; 3ro+: $69.149. Se usa valor 1er evento como base.",
+             79029, 79029, 0.5, 0.5, "Eventos/mes/persona", False),
+            ("cambio_v", "Bono Cambio de Vuelo",            "Cláusula 13d",
+             "Al cambiar vuelo estando en aeropuerto, móvil o posta.",
+             119819, 119819, 0.3, 0.3, "Eventos/mes/persona", False),
+            ("cancel_v", "Bono Cancelación (espera >3h)",   "Cláusula 13b",
+             "Cuando se cancela el primer tramo y espera supera 3 horas.",
+             200469, 200469, 0.2, 0.2, "Eventos/mes/persona", False),
+            ("turno_atp","Bono Turno Aeropuerto (1er turno)","Cláusula 17/4.2",
+             "1er turno mes: $54.700 | desde 2do: $68.377. Se usa valor 1er turno.",
+             54700, 54700, 1.0, 1.0, "Turnos ATO/mes/persona", False),
+            ("pre_libre","Bono PSV previo libre >22:00",    "Cláusula 17/1.6",
+             "Cuando PSV termina entre 22:00 y 23:59 previo a días libres.",
+             64196, 64196, 0.4, 0.4, "Eventos/mes/persona", False),
+        ]
+
+        for bid, nombre, clausula, notas, val_a_def, val_n_def, frec_a, frec_n, frec_lbl, suj_inc in bonos_op:
+            ben_header(nombre, clausula, True, notas)
+            o1, o2, o3, o4 = st.columns(4)
+            val_a  = o1.number_input("Valor unitario actual (CLP)", value=val_a_def,
+                                      step=500, key=f"va_{bid}")
+            val_n  = o2.number_input("Valor unitario nuevo (CLP)",  value=val_n_def,
+                                      step=500, key=f"vn_{bid}")
+            freq_a = o3.number_input(f"{frec_lbl} (actual)", value=frec_a,
+                                      step=0.1, min_value=0.0, key=f"fa_{bid}")
+            freq_n = o4.number_input(f"{frec_lbl} (nuevo)",  value=frec_n,
+                                      step=0.1, min_value=0.0, key=f"fn_{bid}")
+            c_act = val_a * freq_a * 12 * total_dot
+            c_new = val_n * freq_n * 12 * total_dot
+            costo_card("Costo Actual/año", c_act, "Costo Nuevo/año", c_new, suj_inc)
+            nuevos_valores[bid] = dict(nombre=nombre, clausula=clausula,
+                recurrente=True, costo_actual=c_act, costo_nuevo=c_new, suj_inc=suj_inc)
+            st.markdown("---")
+
+        # Bono 5° turno — separado porque TC y JSAB tienen valores distintos
+        ben_header("Bono 5° Turno en adelante", "Cláusula 17/4", True,
+                   "TC: $58.608 | JSAB: $97.678. % de trabajadores que lo activan en el mes.")
+        t1,t2,t3,t4,t5,t6 = st.columns(6)
+        vt_tc_a  = t1.number_input("Valor TC actual",   value=58608,  step=500, key="vt_tc_a")
+        vt_tc_n  = t2.number_input("Valor TC nuevo",    value=58608,  step=500, key="vt_tc_n")
+        vt_j_a   = t3.number_input("Valor JSAB actual", value=97678,  step=500, key="vt_j_a")
+        vt_j_n   = t4.number_input("Valor JSAB nuevo",  value=97678,  step=500, key="vt_j_n")
+        pct_t5_a = t5.number_input("% trabaj. activan (actual)", value=0.15,
+                                    step=0.01, min_value=0.0, max_value=1.0, key="pct_t5_a")
+        pct_t5_n = t6.number_input("% trabaj. activan (nuevo)",  value=0.15,
+                                    step=0.01, min_value=0.0, max_value=1.0, key="pct_t5_n")
+        tc_tot  = n_trainee+n_tcj+n_tc+n_tcs
+        jsab_tot= n_jsab+n_jsabs
+        c_t5_a  = (vt_tc_a*tc_tot + vt_j_a*jsab_tot) * pct_t5_a * 12
+        c_t5_n  = (vt_tc_n*tc_tot + vt_j_n*jsab_tot) * pct_t5_n * 12
+        costo_card("Costo Actual/año", c_t5_a, "Costo Nuevo/año", c_t5_n, False)
+        nuevos_valores["turno5"] = dict(nombre="Bono 5° Turno", clausula="Cláusula 17/4",
+            recurrente=True, costo_actual=c_t5_a, costo_nuevo=c_t5_n, suj_inc=False)
+        st.markdown("---")
+
+        # High Rank
+        ben_header("Diferencial High Rank Programado", "Cláusula 16", True,
+                   "Diferencia entre HV de TCs y JSABs × HV/mes × % vuelos con HR.")
+        hr1,hr2,hr3,hr4 = st.columns(4)
+        diff_hv_a = hr1.number_input("Diferencia HV TCs→JSAB actual (CLP)",
+                                      value=HV_BASE["JSABs"]-HV_BASE["TCs"], step=100, key="hr_diff_a")
+        diff_hv_n = hr2.number_input("Diferencia HV TCs→JSAB nuevo (CLP)",
+                                      value=HV_BASE["JSABs"]-HV_BASE["TCs"], step=100, key="hr_diff_n")
+        pct_hr_a  = hr3.number_input("% vuelos con HR (actual)", value=0.05,
+                                      step=0.01, min_value=0.0, max_value=1.0, key="hr_pct_a")
+        pct_hr_n  = hr4.number_input("% vuelos con HR (nuevo)",  value=0.05,
+                                      step=0.01, min_value=0.0, max_value=1.0, key="hr_pct_n")
+        hv_prom_tcs = hv_mes["TCs"]
+        c_hr_a = diff_hv_a * pct_hr_a * hv_prom_tcs * 12 * n_tcs
+        c_hr_n = diff_hv_n * pct_hr_n * hv_prom_tcs * 12 * n_tcs
+        costo_card("Costo Actual/año", c_hr_a, "Costo Nuevo/año", c_hr_n, False)
+        nuevos_valores["high_rank"] = dict(nombre="High Rank Programado", clausula="Cláusula 16",
+            recurrente=True, costo_actual=c_hr_a, costo_nuevo=c_hr_n, suj_inc=False)
+
+    # ════════════════════════════════════
+    # CATEGORÍA: ASIGNACIONES
+    # ════════════════════════════════════
+    with st.expander("👨‍👩‍👧 Asignaciones", expanded=False):
+
+        asignaciones = [
+            ("escolar",  "Asignación Escolaridad", "Cláusula 29a",
+             "Por hijo estudiante. Valor promedio EM ($164.532). Nº hijos promedio por trabajador.",
+             164532, 164532, 0.8, 0.8, "Hijos estudiantes promedio/trabajador"),
+            ("matrimon", "Asignación Matrimonio / AUC", "Cláusula 29b",
+             "Por evento. % de la dotación que contrae matrimonio o AUC al año.",
+             189211, 189211, 0.03, 0.03, "% dotación que se casa/AUC (por año)"),
+            ("nacim",    "Asignación Nacimiento / Adopción", "Cláusula 29d",
+             "Por hijo nacido o adoptado. % dotación con hijo al año.",
+             189211, 189211, 0.05, 0.05, "% dotación con nacimiento (por año)"),
+            ("fallec",   "Asignación Fallecimiento Familiar", "Cláusula 29c",
+             "Por evento de fallecimiento de familiar directo.",
+             1681904, 1681904, 0.02, 0.02, "% dotación afectada (por año)"),
+        ]
+
+        for bid, nombre, clausula, notas, va_d, vn_d, ca_d, cn_d, cant_lbl in asignaciones:
+            ben_header(nombre, clausula, True, notas)
+            a1,a2,a3,a4 = st.columns(4)
+            va = a1.number_input("Valor unit. actual (CLP)", value=va_d, step=1000, key=f"va_{bid}")
+            vn = a2.number_input("Valor unit. nuevo (CLP)",  value=vn_d, step=1000, key=f"vn_{bid}")
+            ca = a3.number_input(f"{cant_lbl} (actual)", value=ca_d, step=0.01,
+                                  min_value=0.0, key=f"ca_{bid}")
+            cn = a4.number_input(f"{cant_lbl} (nuevo)",  value=cn_d, step=0.01,
+                                  min_value=0.0, key=f"cn_{bid}")
+            c_act = va * ca * total_dot
+            c_new = vn * cn * total_dot
+            costo_card("Costo Actual/año", c_act, "Costo Nuevo/año", c_new, False)
+            nuevos_valores[bid] = dict(nombre=nombre, clausula=clausula,
+                recurrente=True, costo_actual=c_act, costo_nuevo=c_new, suj_inc=False)
+            st.markdown("---")
+
+    # ════════════════════════════════════
+    # CATEGORÍA: BENEFICIOS EN ESPECIE / OTROS
+    # ════════════════════════════════════
+    with st.expander("🏨 Beneficios en Especie y Otros", expanded=False):
+
+        # Viáticos nacionales
+        ben_header("Viáticos Nacionales", "Cláusula 8", True,
+                   "CLP/día × días/mes × 12 meses × dotación.")
+        vn1,vn2,vn3,vn4 = st.columns(4)
+        viatn_va = vn1.number_input("CLP/día actual",  value=35000, step=500,  key="viatn_va")
+        viatn_vn = vn2.number_input("CLP/día nuevo",   value=35000, step=500,  key="viatn_vn")
+        viatn_da = vn3.number_input("Días/mes actual", value=8.0, step=0.5, min_value=0.0, key="viatn_da")
+        viatn_dn = vn4.number_input("Días/mes nuevo",  value=8.0, step=0.5, min_value=0.0, key="viatn_dn")
+        c_vn_a = viatn_va * viatn_da * 12 * total_dot
+        c_vn_n = viatn_vn * viatn_dn * 12 * total_dot
+        costo_card("Costo Actual/año", c_vn_a, "Costo Nuevo/año", c_vn_n, False)
+        nuevos_valores["viatico_n"] = dict(nombre="Viáticos Nacionales", clausula="Cláusula 8",
+            recurrente=True, costo_actual=c_vn_a, costo_nuevo=c_vn_n, suj_inc=False)
+        st.markdown("---")
+
+        # Viáticos internacionales
+        ben_header("Viáticos Internacionales", "Cláusula 8", True,
+                   "USD/día × TC × días/mes × 12 meses × dotación. Tarifa Sudamérica = USD 50.")
+        vi1,vi2,vi3,vi4 = st.columns(4)
+        viati_va = vi1.number_input("USD/día actual",  value=50.0, step=1.0, key="viati_va")
+        viati_vn = vi2.number_input("USD/día nuevo",   value=50.0, step=1.0, key="viati_vn")
+        viati_da = vi3.number_input("Días/mes actual", value=4.0,  step=0.5, min_value=0.0, key="viati_da")
+        viati_dn = vi4.number_input("Días/mes nuevo",  value=4.0,  step=0.5, min_value=0.0, key="viati_dn")
+        c_vi_a = viati_va * tc_usd * viati_da * 12 * total_dot
+        c_vi_n = viati_vn * tc_usd * viati_dn * 12 * total_dot
+        costo_card("Costo Actual/año", c_vi_a, "Costo Nuevo/año", c_vi_n, False)
+        nuevos_valores["viatico_i"] = dict(nombre="Viáticos Internacionales", clausula="Cláusula 8",
+            recurrente=True, costo_actual=c_vi_a, costo_nuevo=c_vi_n, suj_inc=False)
+        st.markdown("---")
+
+        # Movilización
+        ben_header("Movilización (asignación en efectivo)", "Cláusula 18", True,
+                   "Para quienes optan por movilización propia. Monto mensual líquido.")
+        m1,m2,m3,m4 = st.columns(4)
+        mov_va = m1.number_input("CLP/mes actual", value=264528, step=1000, key="mov_va")
+        mov_vn = m2.number_input("CLP/mes nuevo",  value=264528, step=1000, key="mov_vn")
+        mov_pa = m3.number_input("% dotación que opta (actual)", value=0.60,
+                                  step=0.05, min_value=0.0, max_value=1.0, key="mov_pa")
+        mov_pn = m4.number_input("% dotación que opta (nuevo)",  value=0.60,
+                                  step=0.05, min_value=0.0, max_value=1.0, key="mov_pn")
+        c_mov_a = mov_va * 12 * mov_pa * total_dot
+        c_mov_n = mov_vn * 12 * mov_pn * total_dot
+        costo_card("Costo Actual/año", c_mov_a, "Costo Nuevo/año", c_mov_n, False)
+        nuevos_valores["moviliz"] = dict(nombre="Movilización", clausula="Cláusula 18",
+            recurrente=True, costo_actual=c_mov_a, costo_nuevo=c_mov_n, suj_inc=False)
+        st.markdown("---")
+
+        # Bono Antigüedad
+        ben_header("Bono Antigüedad", "Cláusula 32", True,
+                   "% remuneración bruta al cumplir años de servicio. Se modela como % de rem. mensual × % dotación que cumple años.")
+        ba1,ba2,ba3,ba4 = st.columns(4)
+        ba_pct_a = ba1.number_input("% rem. promedio (actual)", value=50.0, step=5.0,
+                                     min_value=0.0, key="ba_pct_a",
+                                     help="50% corresponde a trabajadores que cumplen 10 años")
+        ba_pct_n = ba2.number_input("% rem. promedio (nuevo)",  value=50.0, step=5.0,
+                                     min_value=0.0, key="ba_pct_n")
+        ba_cob_a = ba3.number_input("% dotación que cumple años (actual)", value=0.10,
+                                     step=0.01, min_value=0.0, max_value=1.0, key="ba_cob_a")
+        ba_cob_n = ba4.number_input("% dotación que cumple años (nuevo)",  value=0.10,
+                                     step=0.01, min_value=0.0, max_value=1.0, key="ba_cob_n")
+        rem_prom = (c_hv_act + c_sb_act) / max(total_dot, 1) / 12
+        c_ba_a = rem_prom * (ba_pct_a/100) * ba_cob_a * total_dot
+        c_ba_n = rem_prom * (ba_pct_n/100) * ba_cob_n * total_dot
+        costo_card("Costo Actual/año", c_ba_a, "Costo Nuevo/año", c_ba_n, False)
+        nuevos_valores["bono_ant"] = dict(nombre="Bono Antigüedad", clausula="Cláusula 32",
+            recurrente=True, costo_actual=c_ba_a, costo_nuevo=c_ba_n, suj_inc=False)
+        st.markdown("---")
+
+        # APV
+        ben_header("APV Empresa (matching)", "Cláusula 39", True,
+                   "La empresa iguala el aporte del trabajador. Tope $10.000/mes.")
+        ap1,ap2,ap3,ap4 = st.columns(4)
+        apv_va = ap1.number_input("Aporte máx/mes actual (CLP)", value=10000, step=500, key="apv_va")
+        apv_vn = ap2.number_input("Aporte máx/mes nuevo (CLP)",  value=10000, step=500, key="apv_vn")
+        apv_pa = ap3.number_input("% adhesión actual", value=0.70, step=0.05,
+                                   min_value=0.0, max_value=1.0, key="apv_pa")
+        apv_pn = ap4.number_input("% adhesión nuevo",  value=0.70, step=0.05,
+                                   min_value=0.0, max_value=1.0, key="apv_pn")
+        c_apv_a = apv_va * 12 * apv_pa * total_dot
+        c_apv_n = apv_vn * 12 * apv_pn * total_dot
+        costo_card("Costo Actual/año", c_apv_a, "Costo Nuevo/año", c_apv_n, False)
+        nuevos_valores["apv"] = dict(nombre="APV Empresa", clausula="Cláusula 39",
+            recurrente=True, costo_actual=c_apv_a, costo_nuevo=c_apv_n, suj_inc=False)
+        st.markdown("---")
+
+        # Seguros
+        ben_header("Seguros de Vida y Accidentes", "Cláusula 38", True,
+                   "Prima estimada de mercado por persona/año (vida + accidentes personales).")
+        sg1,sg2 = st.columns(2)
+        seg_va = sg1.number_input("Prima anual/persona actual (CLP)", value=80000, step=5000, key="seg_va")
+        seg_vn = sg2.number_input("Prima anual/persona nueva (CLP)",  value=80000, step=5000, key="seg_vn")
+        c_seg_a = seg_va * total_dot
+        c_seg_n = seg_vn * total_dot
+        costo_card("Costo Actual/año", c_seg_a, "Costo Nuevo/año", c_seg_n, False)
+        nuevos_valores["seguro_v"] = dict(nombre="Seguros Vida+Accidentes", clausula="Cláusula 38",
+            recurrente=True, costo_actual=c_seg_a, costo_nuevo=c_seg_n, suj_inc=False)
+
+    # ════════════════════════════════════
+    # CATEGORÍA: INCREMENTO REAL
+    # ════════════════════════════════════
+    with st.expander("📈 Incremento Real Pactado", expanded=False):
+        ben_header("Incremento Real HV + SB", "Cláusula 43", True,
+                   "1% anual sobre HV y SB según contrato (excluye IPC). Se costea como el delta del 1° año.")
+        ir1, ir2 = st.columns(2)
+        pct_ir_a = ir1.number_input("% incremento actual/año", value=inc_real_pct,
+                                     step=0.5, min_value=0.0, key="ir_pct_a")
+        pct_ir_n = ir2.number_input("% incremento nuevo/año",  value=inc_real_pct,
+                                     step=0.5, min_value=0.0, key="ir_pct_n")
+        c_ir_a = (c_hv_act + c_sb_act) * pct_ir_a / 100
+        c_ir_n = (c_hv_new + c_sb_new) * pct_ir_n / 100
+        costo_card("Delta Inc. Real Actual (año 1)", c_ir_a,
+                   "Delta Inc. Real Nuevo (año 1)", c_ir_n, True)
+        nuevos_valores["inc_real"] = dict(nombre="Incremento Real (HV+SB)", clausula="Cláusula 43",
+            recurrente=True, costo_actual=c_ir_a, costo_nuevo=c_ir_n, suj_inc=True)
+
+    # ════════════════════════════════════
+    # CATEGORÍA: ONE-TIME
+    # ════════════════════════════════════
+    with st.expander("⚡ Pagos One-Time (no recurrentes)", expanded=False):
+        ben_header("Bono Término Negociación Colectiva", "Cláusula 42", False,
+                   "Pago único sep-2023. $4.200.000 brutos/persona. NO forma parte del piso del próximo contrato.")
+        bt1, bt2 = st.columns(2)
+        bono_t_va = bt1.number_input("Valor actual/persona (CLP)", value=4200000, step=100000, key="bt_va")
+        bono_t_vn = bt2.number_input("Valor nuevo/persona (CLP)",  value=4200000, step=100000, key="bt_vn")
+        c_bt_a = bono_t_va * total_dot
+        c_bt_n = bono_t_vn * total_dot
+        costo_card("Costo One-Time Actual", c_bt_a, "Costo One-Time Nuevo", c_bt_n, False)
+        nuevos_valores["bono_term"] = dict(nombre="Bono Término NC", clausula="Cláusula 42",
+            recurrente=False, costo_actual=c_bt_a, costo_nuevo=c_bt_n, suj_inc=False)
+
+    # ════════════════════════════════════
+    # TOTALES TAB 1
+    # ════════════════════════════════════
     st.markdown('<div class="section-title">📊 Resumen de Costos</div>', unsafe_allow_html=True)
 
-    total_act_rec  = sum(v["costo_actual"] for v in nuevos_valores.values() if v["recurrente"] and v["nombre"] != "Bono Término Negociación Colectiva")
-    total_new_rec  = sum(v["costo_nuevo"]  for v in nuevos_valores.values() if v["recurrente"] and v["nombre"] != "Bono Término Negociación Colectiva")
-    total_onetime  = sum(v["costo_actual"] for v in nuevos_valores.values() if not v["recurrente"])
+    total_act_rec = sum(v["costo_actual"] for v in nuevos_valores.values() if v["recurrente"])
+    total_new_rec = sum(v["costo_nuevo"]  for v in nuevos_valores.values() if v["recurrente"])
+    total_onetime = sum(v["costo_actual"] for v in nuevos_valores.values() if not v["recurrente"])
+    delta_rec     = total_new_rec - total_act_rec
 
-    delta_rec = total_new_rec - total_act_rec
-
-    c1, c2, c3, c4 = st.columns(4)
-    def metric_card(col, label, value_clp, delta_clp=None, usd=True):
-        val_usd = value_clp / tc_usd
-        delta_html = ""
+    tc1, tc2, tc3, tc4 = st.columns(4)
+    def big_metric(col, label, val_clp, delta_clp=None):
+        val_usd = val_clp / tc_usd
+        d_html = ""
         if delta_clp is not None:
-            sign = "+" if delta_clp > 0 else ""
+            sign  = "+" if delta_clp >= 0 else ""
             color = ROJO if delta_clp > 0 else VERDE
-            delta_html = f'<div class="delta" style="color:{color}">{sign}${delta_clp/1e6:.2f}M vs. actual</div>'
+            d_html = f'<div class="delta" style="color:{color}">{sign}${delta_clp/1e6:.2f}M vs. actual</div>'
         col.markdown(f"""
         <div class="metric-card">
           <div class="label">{label}</div>
-          <div class="value">${value_clp/1e6:.1f}M CLP</div>
-          <div style="font-size:13px;color:#6B7280">${val_usd/1e6:.2f}M USD</div>
-          {delta_html}
+          <div class="value">${val_clp/1e6:.1f}M CLP</div>
+          <div style="font-size:12px;color:#6B7280">${val_usd/1e6:.2f}M USD</div>
+          {d_html}
         </div>""", unsafe_allow_html=True)
 
-    metric_card(c1, "Costo Recurrente Actual / Año", total_act_rec)
-    metric_card(c2, "Costo Recurrente Nuevo / Año",  total_new_rec, delta_rec)
-    metric_card(c3, "Costo por Trabajador / Año (actual)", total_act_rec/max(total_dot,1))
-    metric_card(c4, "One-Time (Bono Firma)", total_onetime)
+    big_metric(tc1, "Costo Recurrente Actual / Año", total_act_rec)
+    big_metric(tc2, "Costo Recurrente Nuevo / Año",  total_new_rec, delta_rec)
+    big_metric(tc3, "Costo x Trabajador / Año (actual)", total_act_rec / max(total_dot, 1))
+    big_metric(tc4, "Bono Firma (One-Time)", total_onetime)
 
-    # Guardar en session state para otros tabs
-    st.session_state["nuevos_valores"] = nuevos_valores
-    st.session_state["total_act_rec"]  = total_act_rec
-    st.session_state["total_new_rec"]  = total_new_rec
-    st.session_state["total_onetime"]  = total_onetime
-    st.session_state["total_dot"]      = total_dot
+    # Guardar en session_state para otros tabs
+    st.session_state.update({
+        "nv": nuevos_valores,
+        "t_act_rec": total_act_rec,
+        "t_new_rec": total_new_rec,
+        "t_onetime": total_onetime,
+        "t_dot":     total_dot,
+        "c_hv_act":  c_hv_act,
+        "c_sb_act":  c_sb_act,
+    })
 
 # ══════════════════════════════════════════════
 # TAB 2 — EVOLUCIÓN ANUAL & CAGR
 # ══════════════════════════════════════════════
 with tab2:
-    st.markdown('<div class="section-title">Evolución del Costo Total — Punta a Punta (3 años)</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Evolución del Costo — Punta a Punta (hasta 3 años)</div>',
+                unsafe_allow_html=True)
 
-    nv   = st.session_state.get("nuevos_valores", {})
-    t_act = st.session_state.get("total_act_rec", 0)
-    t_new = st.session_state.get("total_new_rec", 0)
-    t_dot = st.session_state.get("total_dot", total_dot)
+    nv    = st.session_state.get("nv", {})
+    t_act = st.session_state.get("t_act_rec", 0)
+    t_new = st.session_state.get("t_new_rec", 0)
 
     if not nv:
-        st.info("Ajusta los parámetros en la Tab 1 primero.")
+        st.info("Primero ajusta los parámetros en la Tab 1.")
     else:
-        años_labels = [f"Año {i}" for i in range(anios + 1)]
-
-        # Costo actual proyectado con incremento real
-        costos_actuales = []
-        costos_nuevos   = []
+        años_l = [f"Año {i}" for i in range(anios + 1)]
+        costos_act, costos_new = [], []
 
         for yr in range(anios + 1):
             f = factor_inc(yr, inc_real_pct)
-            c_act = 0
-            c_new = 0
-            for bid, v in nv.items():
-                if not v["recurrente"]:
-                    continue
-                base_act = v["costo_actual"]
-                base_new = v["costo_nuevo"]
-                if v["suj_inc"]:
-                    c_act += base_act * f
-                    c_new += base_new * f
-                else:
-                    c_act += base_act
-                    c_new += base_new
-            costos_actuales.append(c_act)
-            costos_nuevos.append(c_new)
+            ca = cn = 0
+            for v in nv.values():
+                if not v["recurrente"]: continue
+                ca += v["costo_actual"] * f if v["suj_inc"] else v["costo_actual"]
+                cn += v["costo_nuevo"]  * f if v["suj_inc"] else v["costo_nuevo"]
+            costos_act.append(ca)
+            costos_new.append(cn)
 
-        # CAGR
-        def cagr(inicio, fin, n):
-            if inicio <= 0 or n == 0:
-                return 0
-            return ((fin / inicio) ** (1/n) - 1) * 100
+        cagr_act = cagr(costos_act[0], costos_act[-1], anios)
+        cagr_new = cagr(costos_new[0], costos_new[-1], anios)
+        delta_pp  = costos_new[-1] - costos_act[-1]
+        delta_pp_pct = delta_pp / costos_act[-1] * 100 if costos_act[-1] else 0
 
-        cagr_act = cagr(costos_actuales[0], costos_actuales[-1], anios)
-        cagr_new = cagr(costos_nuevos[0],   costos_nuevos[-1],   anios)
-        cagr_rel = cagr(costos_actuales[-1], costos_nuevos[-1],  1) if anios > 0 else 0
-
-        # Variación punta a punta
-        delta_punta = costos_nuevos[-1] - costos_actuales[-1]
-        delta_punta_pct = delta_punta / costos_actuales[-1] * 100 if costos_actuales[-1] else 0
-
-        c1, c2, c3, c4 = st.columns(4)
-        def kpi(col, label, val, suffix="", color=AZUL):
+        k1,k2,k3,k4 = st.columns(4)
+        for col, lbl, val, suf in [
+            (k1,"CAGR Contrato Actual",  cagr_act,    "%"),
+            (k2,"CAGR Contrato Nuevo",   cagr_new,    "%"),
+            (k3,f"Δ Costo Año {anios} (%)", delta_pp_pct,"%"),
+            (k4,f"Δ Absoluto Año {anios}", delta_pp/1e6,"M CLP"),
+        ]:
+            color = ROJO if val > 0 and "Δ" in lbl else AZUL
             col.markdown(f"""
             <div class="metric-card">
-              <div class="label">{label}</div>
-              <div class="value" style="color:{color}">{val:.2f}{suffix}</div>
+              <div class="label">{lbl}</div>
+              <div class="value" style="color:{color}">{val:.2f}{suf}</div>
             </div>""", unsafe_allow_html=True)
 
-        kpi(c1, "CAGR Contrato Actual (3a)", cagr_act, "%")
-        kpi(c2, "CAGR Contrato Nuevo (3a)",  cagr_new, "%")
-        kpi(c3, "Δ Costo Año 3 (nuevo vs actual)", delta_punta_pct, "%", ROJO if delta_punta_pct>0 else VERDE)
-        kpi(c4, "Δ Absoluto Año 3", delta_punta/1e6, "M CLP", ROJO if delta_punta>0 else VERDE)
-
-        # Gráfico de barras agrupadas + líneas
+        # Gráfico barras + línea delta
         fig = go.Figure()
-        fig.add_trace(go.Bar(
-            name="Contrato Actual",
-            x=años_labels,
-            y=[c/1e6 for c in costos_actuales],
-            marker_color=AZUL,
-            opacity=0.85,
-        ))
-        fig.add_trace(go.Bar(
-            name="Contrato Nuevo",
-            x=años_labels,
-            y=[c/1e6 for c in costos_nuevos],
-            marker_color=ROJO,
-            opacity=0.85,
-        ))
-        fig.add_trace(go.Scatter(
-            name="Δ incremental",
-            x=años_labels,
-            y=[(n-a)/1e6 for n,a in zip(costos_nuevos, costos_actuales)],
-            mode="lines+markers",
-            line=dict(color=AMBAR, width=2, dash="dot"),
-            yaxis="y2"
-        ))
-        fig.update_layout(
-            title="Costo Recurrente Anual — Actual vs. Nuevo Contrato",
-            barmode="group",
-            yaxis=dict(title="CLP Millones"),
-            yaxis2=dict(title="Δ CLP Millones", overlaying="y", side="right", showgrid=False),
-            legend=dict(orientation="h", y=1.08),
-            plot_bgcolor=BLANCO,
-            paper_bgcolor=GRIS,
-            font=dict(color=AZUL),
-            height=420,
-        )
+        fig.add_trace(go.Bar(name="Contrato Actual", x=años_l,
+                             y=[c/1e6 for c in costos_act],
+                             marker_color=AZUL, opacity=0.85))
+        fig.add_trace(go.Bar(name="Contrato Nuevo", x=años_l,
+                             y=[c/1e6 for c in costos_new],
+                             marker_color=ROJO, opacity=0.85))
+        fig.add_trace(go.Scatter(name="Δ (nuevo–actual)", x=años_l,
+                                  y=[(n-a)/1e6 for n,a in zip(costos_new,costos_act)],
+                                  mode="lines+markers",
+                                  line=dict(color=AMBAR, width=2, dash="dot"),
+                                  yaxis="y2"))
+        fig.update_layout(barmode="group",
+                          title="Costo Recurrente Anual — Actual vs. Nuevo",
+                          yaxis=dict(title="CLP Millones"),
+                          yaxis2=dict(title="Δ CLP M", overlaying="y",
+                                      side="right", showgrid=False),
+                          legend=dict(orientation="h", y=1.08),
+                          plot_bgcolor=BLANCO, paper_bgcolor=GRIS,
+                          font=dict(color=AZUL), height=430)
         st.plotly_chart(fig, use_container_width=True)
 
         # Tabla punta a punta
         df_pp = pd.DataFrame({
-            "Año": años_labels,
-            "Costo Actual (CLP M)": [f"${c/1e6:.2f}M" for c in costos_actuales],
-            "Costo Nuevo (CLP M)":  [f"${c/1e6:.2f}M" for c in costos_nuevos],
-            "Δ (CLP M)":           [f"${(n-a)/1e6:+.2f}M" for n,a in zip(costos_nuevos,costos_actuales)],
-            "Costo Actual (USD M)": [f"${c/tc_usd/1e6:.2f}M" for c in costos_actuales],
-            "Costo Nuevo (USD M)":  [f"${c/tc_usd/1e6:.2f}M" for c in costos_nuevos],
+            "Año": años_l,
+            "Costo Actual (CLP M)": [f"${c/1e6:.2f}M" for c in costos_act],
+            "Costo Nuevo (CLP M)":  [f"${c/1e6:.2f}M" for c in costos_new],
+            "Δ (CLP M)":            [f"${(n-a)/1e6:+.2f}M" for n,a in zip(costos_new,costos_act)],
+            "Δ %":                  [f"{(n-a)/a*100:+.2f}%" for n,a in zip(costos_new,costos_act)],
+            "Costo Act (USD M)":    [f"${c/tc_usd/1e6:.2f}M" for c in costos_act],
+            "Costo Nvo (USD M)":    [f"${c/tc_usd/1e6:.2f}M" for c in costos_new],
         })
         st.dataframe(df_pp, use_container_width=True, hide_index=True)
 
-        # Gráfico waterfall por categoría
-        st.markdown("#### Variación por Categoría de Beneficio (Año 1 vs Año 3)")
-        cat_names, cat_deltas = [], []
+        # Waterfall por categoría
+        st.markdown("#### Variación por Categoría (Nuevo vs. Actual)")
         cat_map = {
-            "Rem. Directas":    ["hv","sb","gratif"],
-            "Bonos Recurrentes":["asist","fiestas","navidad","bono_des","bono_prod"],
-            "Bonos Operac.":    ["psvnc","ext_psv","cambio_v","cancel_v","turno5","turno_atp","pre_libre","high_rank"],
-            "Asignaciones":     ["escolar","matrimon","nacim","fallec"],
-            "Benef. Especie":   ["viatico_n","viatico_i","moviliz","bono_ant","apv","seguro_v"],
-            "Inc. Real":        ["inc_real"],
+            "Rem. Directas":     ["hv","sb","gratif"],
+            "Bonos Recurrentes": ["asist","fiestas","navidad","bono_des","bono_prod"],
+            "Bonos Operac.":     ["psvnc","ext_psv","cambio_v","cancel_v","turno5","turno_atp","pre_libre","high_rank"],
+            "Asignaciones":      ["escolar","matrimon","nacim","fallec"],
+            "Benef. Especie":    ["viatico_n","viatico_i","moviliz","bono_ant","apv","seguro_v"],
+            "Inc. Real":         ["inc_real"],
         }
-        for cname, cids in cat_map.items():
-            delta_cat = sum(
-                (nv[bid]["costo_nuevo"] - nv[bid]["costo_actual"])
-                for bid in cids if bid in nv
-            )
-            cat_names.append(cname)
-            cat_deltas.append(delta_cat / 1e6)
-
-        colors_wf = [ROJO if d > 0 else VERDE for d in cat_deltas]
+        cat_names = list(cat_map.keys())
+        cat_deltas = [sum((nv[b]["costo_nuevo"]-nv[b]["costo_actual"])
+                         for b in ids if b in nv) / 1e6
+                      for ids in cat_map.values()]
         fig2 = go.Figure(go.Bar(
             x=cat_names, y=cat_deltas,
-            marker_color=colors_wf,
+            marker_color=[ROJO if d>0 else VERDE for d in cat_deltas],
             text=[f"${d:+.1f}M" for d in cat_deltas],
             textposition="outside"
         ))
-        fig2.update_layout(
-            title="Variación de Costo Nuevo vs. Actual por Categoría (CLP M)",
-            yaxis_title="CLP Millones",
-            plot_bgcolor=BLANCO, paper_bgcolor=GRIS,
-            font=dict(color=AZUL), height=350,
-        )
+        fig2.update_layout(title="Δ Costo Nuevo vs. Actual por Categoría (CLP M)",
+                           yaxis_title="CLP M", plot_bgcolor=BLANCO,
+                           paper_bgcolor=GRIS, font=dict(color=AZUL), height=360)
         st.plotly_chart(fig2, use_container_width=True)
 
-        # Composición del costo en donut
-        st.markdown("#### Composición del Costo Anual Actual")
-        pie_labels, pie_values = [], []
+        # Donut composición actual
+        st.markdown("#### Composición Costo Recurrente Actual")
+        pie_l, pie_v = [], []
         for cname, cids in cat_map.items():
-            val = sum(nv[bid]["costo_actual"] for bid in cids if bid in nv)
-            if val > 0:
-                pie_labels.append(cname)
-                pie_values.append(val)
-
-        colors_pie = [AZUL, ROJO, "#4B6FD4", "#E05C6E", "#7B93D9", AMBAR]
-        fig3 = go.Figure(go.Pie(
-            labels=pie_labels, values=pie_values,
-            hole=0.5,
-            marker_colors=colors_pie,
-            textinfo="label+percent",
-            insidetextorientation="radial"
-        ))
-        fig3.update_layout(
-            title="Composición Costo Recurrente Actual",
-            paper_bgcolor=GRIS, font=dict(color=AZUL),
-            height=380,
-            annotations=[dict(text=f"${sum(pie_values)/1e6:.0f}M", x=0.5, y=0.5,
-                               font_size=16, font_color=AZUL, showarrow=False)]
-        )
+            v = sum(nv[b]["costo_actual"] for b in cids if b in nv)
+            if v > 0: pie_l.append(cname); pie_v.append(v)
+        colors_pie = [AZUL, ROJO, "#4B6FD4","#E05C6E","#7B93D9",AMBAR]
+        fig3 = go.Figure(go.Pie(labels=pie_l, values=pie_v, hole=0.5,
+                                 marker_colors=colors_pie,
+                                 textinfo="label+percent"))
+        fig3.update_layout(title="Composición Costo Anual Actual",
+                           paper_bgcolor=GRIS, font=dict(color=AZUL), height=380,
+                           annotations=[dict(text=f"${sum(pie_v)/1e6:.0f}M",
+                                             x=0.5, y=0.5, font_size=16,
+                                             font_color=AZUL, showarrow=False)])
         st.plotly_chart(fig3, use_container_width=True)
 
 # ══════════════════════════════════════════════
 # TAB 3 — SIMULADOR NUEVO CONTRATO
 # ══════════════════════════════════════════════
 with tab3:
-    st.markdown('<div class="section-title">Simulador de Propuesta — Nuevo Contrato</div>', unsafe_allow_html=True)
-    st.caption("Modifica los parámetros clave para simular el costo de un contrato nuevo. Los valores 'nuevo' se toman del Tab 1.")
+    st.markdown('<div class="section-title">Simulador de Propuesta — Nuevo Contrato</div>',
+                unsafe_allow_html=True)
 
-    nv = st.session_state.get("nuevos_valores", {})
+    nv    = st.session_state.get("nv", {})
+    t_act = st.session_state.get("t_act_rec", 0)
+
     if not nv:
-        st.info("Completa el Tab 1 primero.")
+        st.info("Completa primero el Tab 1.")
     else:
-        col_sim1, col_sim2 = st.columns([2,1])
-
-        with col_sim1:
+        cs1, cs2 = st.columns([2, 1])
+        with cs1:
             st.markdown("#### Parámetros de Negociación")
-
-            # Incremento adicional sobre HV
-            inc_hv = st.slider("Incremento adicional sobre Hora de Vuelo (%)", 0.0, 20.0, 0.0, 0.5)
-            inc_sb = st.slider("Incremento adicional sobre Sueldo Base (%)",   0.0, 20.0, 0.0, 0.5)
-            inc_bonos = st.slider("Incremento general sobre bonos fijos (%)",  0.0, 20.0, 0.0, 0.5)
-            nueva_dot = st.slider("Variación de dotación (%)", -20, 30, 0, 1)
-
-            # Nuevos beneficios propuestos
+            inc_hv    = st.slider("Incremento adicional HV (%)",    0.0, 25.0, 0.0, 0.5)
+            inc_sb    = st.slider("Incremento adicional SB (%)",    0.0, 25.0, 0.0, 0.5)
+            inc_bonos = st.slider("Incremento bonos recurrentes (%)",0.0, 25.0, 0.0, 0.5)
+            inc_dot   = st.slider("Variación dotación (%)",        -20,  30,   0,   1)
             st.markdown("#### Nuevos Beneficios Propuestos")
-            nuevo_ben1_nombre = st.text_input("Nombre beneficio nuevo 1", "Bono Bienestar")
-            nuevo_ben1_valor  = st.number_input("Valor anual total (CLP)", value=0, step=100000, key="nb1")
-            nuevo_ben2_nombre = st.text_input("Nombre beneficio nuevo 2", "")
-            nuevo_ben2_valor  = st.number_input("Valor anual total (CLP)", value=0, step=100000, key="nb2")
+            nb1_n = st.text_input("Nombre beneficio nuevo 1", "Bono Bienestar")
+            nb1_v = st.number_input("Valor anual total (CLP)", value=0, step=100000, key="nb1")
+            nb2_n = st.text_input("Nombre beneficio nuevo 2", "")
+            nb2_v = st.number_input("Valor anual total (CLP)", value=0, step=100000, key="nb2")
 
-        with col_sim2:
+        with cs2:
             st.markdown("#### Resultado Simulación")
-
-            # Calculamos el costo nuevo simulado
-            dot_factor = 1 + nueva_dot / 100
-            hv_base  = nv.get("hv", {}).get("costo_actual", 0) * (1 + inc_hv/100) * dot_factor
-            sb_base  = nv.get("sb", {}).get("costo_actual", 0) * (1 + inc_sb/100) * dot_factor
-            grat_sim = (hv_base + sb_base) * 0.0833
-
-            costo_sim = hv_base + sb_base + grat_sim
+            dot_f = 1 + inc_dot / 100
+            hv_s  = nv.get("hv",{}).get("costo_actual",0) * (1+inc_hv/100) * dot_f
+            sb_s  = nv.get("sb",{}).get("costo_actual",0) * (1+inc_sb/100) * dot_f
+            gr_s  = (hv_s + sb_s) * 0.0833
+            c_sim = hv_s + sb_s + gr_s
             for bid, v in nv.items():
-                if bid in ["hv","sb","gratif"]:
-                    continue
-                if not v["recurrente"]:
-                    continue
-                if bid in ["bono_des","bono_prod","asist"]:
-                    costo_sim += v["costo_actual"] * (1 + inc_bonos/100) * dot_factor
-                else:
-                    costo_sim += v["costo_actual"] * dot_factor
+                if bid in ("hv","sb","gratif") or not v["recurrente"]: continue
+                mult = (1+inc_bonos/100) if bid in ("asist","fiestas","navidad","bono_des","bono_prod") else 1
+                c_sim += v["costo_actual"] * mult * dot_f
+            c_sim += nb1_v + nb2_v
 
-            costo_sim += nuevo_ben1_valor + nuevo_ben2_valor
+            delta_s = c_sim - t_act
+            pct_s   = delta_s / t_act * 100 if t_act else 0
+            cagr_s  = cagr(t_act, c_sim * factor_inc(anios, inc_real_pct), anios)
 
-            t_act = st.session_state.get("total_act_rec", 1)
-            delta_sim = costo_sim - t_act
-            delta_sim_pct = delta_sim / t_act * 100
-
-            cagr_sim = cagr(t_act, costo_sim * (factor_inc(anios, inc_real_pct)), anios) if anios > 0 else 0
-
-            def kpi_sim(label, val_clp, suffix="CLP"):
-                val_usd = val_clp / tc_usd
+            for lbl, val, suf, extra in [
+                ("Costo Actual Recurrente",  t_act,  None, None),
+                ("Costo Simulado Nuevo",     c_sim,  None, None),
+            ]:
+                usd = val/tc_usd
                 st.markdown(f"""
                 <div class="metric-card">
-                  <div class="label">{label}</div>
-                  <div class="value">${val_clp/1e6:.2f}M CLP</div>
-                  <div style="font-size:12px;color:#6B7280">${val_usd/1e6:.2f}M USD</div>
+                  <div class="label">{lbl}</div>
+                  <div class="value">${val/1e6:.2f}M CLP</div>
+                  <div style="font-size:12px;color:#6B7280">${usd/1e6:.2f}M USD</div>
                 </div>""", unsafe_allow_html=True)
 
-            kpi_sim("Costo Actual Recurrente", t_act)
-            kpi_sim("Costo Simulado Nuevo", costo_sim)
-
-            sign = "+" if delta_sim > 0 else ""
-            color_d = ROJO if delta_sim > 0 else VERDE
+            sign_s = "+" if delta_s >= 0 else ""
+            col_s  = ROJO if delta_s > 0 else VERDE
             st.markdown(f"""
             <div class="metric-card">
               <div class="label">Variación vs. Actual</div>
-              <div class="value" style="color:{color_d}">{sign}{delta_sim_pct:.2f}%</div>
-              <div style="font-size:13px;color:{color_d}">{sign}${delta_sim/1e6:.2f}M CLP/año</div>
-            </div>""", unsafe_allow_html=True)
-
-            st.markdown(f"""
+              <div class="value" style="color:{col_s}">{sign_s}{pct_s:.2f}%</div>
+              <div style="font-size:13px;color:{col_s}">{sign_s}${delta_s/1e6:.2f}M CLP/año</div>
+            </div>
             <div class="metric-card">
               <div class="label">CAGR Simulado ({anios}a)</div>
-              <div class="value">{cagr_sim:.2f}%</div>
-              <div style="font-size:12px;color:#6B7280">Incluye inc. real {inc_real_pct}%/a</div>
+              <div class="value">{cagr_s:.2f}%</div>
+              <div style="font-size:12px;color:#6B7280">Inc. real {inc_real_pct:.1f}%/a incluido</div>
             </div>""", unsafe_allow_html=True)
-
-            costo_punta_sim = costo_sim * factor_inc(anios, inc_real_pct)
-            costo_punta_act = t_act    * factor_inc(anios, inc_real_pct)
+            c_pp_s = c_sim * factor_inc(anios, inc_real_pct)
+            c_pp_a = t_act  * factor_inc(anios, inc_real_pct)
             st.markdown(f"""
             <div class="metric-card">
               <div class="label">Costo Año {anios} (punta)</div>
-              <div class="value">${costo_punta_sim/1e6:.2f}M CLP</div>
-              <div style="font-size:13px;color:{ROJO}">${(costo_punta_sim - costo_punta_act)/1e6:+.2f}M vs. actual</div>
+              <div class="value">${c_pp_s/1e6:.2f}M CLP</div>
+              <div style="font-size:13px;color:{ROJO}">${(c_pp_s-c_pp_a)/1e6:+.2f}M vs. actual</div>
             </div>""", unsafe_allow_html=True)
 
-        # Gráfico comparativo simulación
-        años_l = [f"Año {i}" for i in range(anios+1)]
-        c_act_yr = [t_act   * factor_inc(yr, inc_real_pct) for yr in range(anios+1)]
-        c_sim_yr = [costo_sim * factor_inc(yr, inc_real_pct) for yr in range(anios+1)]
-
-        fig_sim = go.Figure()
-        fig_sim.add_trace(go.Scatter(x=años_l, y=[c/1e6 for c in c_act_yr],
+        # Gráfico trayectoria
+        años_l2 = [f"Año {i}" for i in range(anios+1)]
+        c_a_yr  = [t_act  * factor_inc(yr, inc_real_pct) for yr in range(anios+1)]
+        c_s_yr  = [c_sim  * factor_inc(yr, inc_real_pct) for yr in range(anios+1)]
+        fig_s = go.Figure()
+        fig_s.add_trace(go.Scatter(x=años_l2, y=[c/1e6 for c in c_a_yr],
             name="Contrato Actual", mode="lines+markers",
             line=dict(color=AZUL, width=3), marker=dict(size=8)))
-        fig_sim.add_trace(go.Scatter(x=años_l, y=[c/1e6 for c in c_sim_yr],
+        fig_s.add_trace(go.Scatter(x=años_l2, y=[c/1e6 for c in c_s_yr],
             name="Contrato Simulado", mode="lines+markers",
             line=dict(color=ROJO, width=3, dash="dash"), marker=dict(size=8)))
-        fig_sim.update_layout(
-            title="Trayectoria de Costo — Actual vs. Propuesta Simulada",
-            yaxis_title="CLP Millones",
-            plot_bgcolor=BLANCO, paper_bgcolor=GRIS,
-            font=dict(color=AZUL), height=380,
-            legend=dict(orientation="h", y=1.08)
-        )
-        st.plotly_chart(fig_sim, use_container_width=True)
+        fig_s.update_layout(title="Trayectoria de Costo — Actual vs. Simulado",
+                             yaxis_title="CLP Millones", plot_bgcolor=BLANCO,
+                             paper_bgcolor=GRIS, font=dict(color=AZUL), height=380,
+                             legend=dict(orientation="h", y=1.08))
+        st.plotly_chart(fig_s, use_container_width=True)
 
 # ══════════════════════════════════════════════
 # TAB 4 — RESUMEN EJECUTIVO
@@ -804,97 +948,100 @@ with tab3:
 with tab4:
     st.markdown('<div class="section-title">Resumen Ejecutivo</div>', unsafe_allow_html=True)
 
-    nv    = st.session_state.get("nuevos_valores", {})
-    t_act = st.session_state.get("total_act_rec", 0)
-    t_new = st.session_state.get("total_new_rec", 0)
-    t_one = st.session_state.get("total_onetime", 0)
-    t_dot = st.session_state.get("total_dot", total_dot)
+    nv    = st.session_state.get("nv", {})
+    t_act = st.session_state.get("t_act_rec", 0)
+    t_new = st.session_state.get("t_new_rec", 0)
+    t_one = st.session_state.get("t_onetime", 0)
+    t_dot = st.session_state.get("t_dot", total_dot)
 
     if not nv:
-        st.info("Completa los parámetros en la Tab 1.")
+        st.info("Completa el Tab 1 primero.")
     else:
         st.markdown(f"""
-        <div style="background:{BLANCO};border-radius:10px;padding:20px 28px;box-shadow:0 1px 6px rgba(0,0,0,0.07);margin-bottom:16px">
-          <h3 style="color:{AZUL};margin-top:0">Contrato Colectivo · STCLE / Transporte Aéreo S.A.</h3>
-          <p style="color:#4B5563">Período: 01/09/2023 – 31/08/2026 &nbsp;|&nbsp; Trabajadores: <b>{t_dot}</b> &nbsp;|&nbsp; TC: $980 CLP/USD</p>
+        <div style="background:{BLANCO};border-radius:10px;padding:20px 28px;
+                    box-shadow:0 1px 6px rgba(0,0,0,.07);margin-bottom:16px">
+          <h3 style="color:{AZUL};margin-top:0">
+            Contrato Colectivo · STCLE / Transporte Aéreo S.A.</h3>
+          <p style="color:#4B5563">
+            Período: 01/09/2023 – 31/08/2026 &nbsp;|&nbsp;
+            Trabajadores: <b>{t_dot}</b> &nbsp;|&nbsp; TC: ${tc_usd:,} CLP/USD
+          </p>
           <hr style="border-color:#E5E7EB">
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:12px">
             <div>
-              <div style="font-size:12px;color:#6B7280;text-transform:uppercase">Costo recurrente anual actual</div>
+              <div style="font-size:11px;color:#6B7280;text-transform:uppercase">Costo recurrente actual / año</div>
               <div style="font-size:24px;font-weight:700;color:{AZUL}">${t_act/1e6:.1f}M CLP</div>
-              <div style="font-size:13px;color:#6B7280">${t_act/tc_usd/1e6:.2f}M USD</div>
+              <div style="font-size:13px;color:#9CA3AF">${t_act/tc_usd/1e6:.2f}M USD</div>
             </div>
             <div>
-              <div style="font-size:12px;color:#6B7280;text-transform:uppercase">Costo por trabajador/año</div>
-              <div style="font-size:24px;font-weight:700;color:{AZUL}">${t_act/max(t_dot,1)/1e6:.2f}M CLP</div>
-              <div style="font-size:13px;color:#6B7280">${t_act/max(t_dot,1)/tc_usd/1e3:.0f}K USD</div>
+              <div style="font-size:11px;color:#6B7280;text-transform:uppercase">Costo por trabajador / año</div>
+              <div style="font-size:24px;font-weight:700;color:{AZUL}">${t_act/max(t_dot,1)/1e6:.3f}M CLP</div>
+              <div style="font-size:13px;color:#9CA3AF">${t_act/max(t_dot,1)/tc_usd/1e3:.0f}K USD</div>
             </div>
             <div>
-              <div style="font-size:12px;color:#6B7280;text-transform:uppercase">One-Time (bono firma)</div>
+              <div style="font-size:11px;color:#6B7280;text-transform:uppercase">Bono firma (one-time)</div>
               <div style="font-size:24px;font-weight:700;color:{ROJO}">${t_one/1e6:.1f}M CLP</div>
-              <div style="font-size:13px;color:#6B7280">${t_one/tc_usd/1e6:.2f}M USD</div>
+              <div style="font-size:13px;color:#9CA3AF">${t_one/tc_usd/1e6:.2f}M USD</div>
             </div>
           </div>
-        </div>
-        """, unsafe_allow_html=True)
+        </div>""", unsafe_allow_html=True)
 
-        # Tabla resumen por beneficio
-        filas_res = []
-        for bid, v in nv.items():
+        # Tabla detalle
+        rows = []
+        for v in nv.values():
             delta = v["costo_nuevo"] - v["costo_actual"]
-            filas_res.append({
-                "Beneficio":           v["nombre"],
-                "Cláusula":            v["clausula"],
-                "Tipo":                "Recurrente" if v["recurrente"] else "One-Time",
-                "Costo Actual CLP/año":f"${v['costo_actual']:,.0f}",
-                "Costo Nuevo CLP/año": f"${v['costo_nuevo']:,.0f}",
-                "Δ CLP/año":           f"${delta:+,.0f}",
-                "Δ %":                 f"{delta/v['costo_actual']*100:+.1f}%" if v["costo_actual"] else "N/A",
-                "Inc. Real":           "✓" if v["suj_inc"] else "—",
+            pct_d = f"{delta/v['costo_actual']*100:+.1f}%" if v["costo_actual"] else "N/A"
+            rows.append({
+                "Beneficio":          v["nombre"],
+                "Cláusula":           v["clausula"],
+                "Tipo":               "Recurrente" if v["recurrente"] else "One-Time",
+                "Costo Actual (CLP)": f"${v['costo_actual']:,.0f}",
+                "Costo Nuevo (CLP)":  f"${v['costo_nuevo']:,.0f}",
+                "Δ CLP":              f"${delta:+,.0f}",
+                "Δ %":                pct_d,
+                "Inc.Real":           "✓" if v["suj_inc"] else "—",
             })
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True, height=520)
 
-        df_res = pd.DataFrame(filas_res)
-        st.dataframe(df_res, use_container_width=True, hide_index=True, height=500)
-
-        # Totales finales
         st.markdown("---")
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            st.markdown(f"""
-            <div class="metric-card">
-              <div class="label">Total recurrente actual / año</div>
-              <div class="value">${t_act/1e6:.2f}M CLP &nbsp;|&nbsp; ${t_act/tc_usd/1e6:.2f}M USD</div>
-              <div class="delta">Costo por trabajador: ${t_act/max(t_dot,1)/1e3:,.0f}K CLP</div>
-            </div>""", unsafe_allow_html=True)
-        with col_f2:
-            delta_tot = t_new - t_act
-            sign = "+" if delta_tot > 0 else ""
-            st.markdown(f"""
-            <div class="metric-card">
-              <div class="label">Total recurrente nuevo / año</div>
-              <div class="value">${t_new/1e6:.2f}M CLP &nbsp;|&nbsp; ${t_new/tc_usd/1e6:.2f}M USD</div>
-              <div class="delta {'delta-neg' if delta_tot>0 else 'delta-pos'}">{sign}${delta_tot/1e6:.2f}M CLP vs. actual</div>
-            </div>""", unsafe_allow_html=True)
+        rf1, rf2 = st.columns(2)
+        delta_tot = t_new - t_act
+        sign_tot  = "+" if delta_tot >= 0 else ""
+        col_tot   = ROJO if delta_tot > 0 else VERDE
+        rf1.markdown(f"""
+        <div class="metric-card">
+          <div class="label">Total recurrente actual / año</div>
+          <div class="value">${t_act/1e6:.2f}M CLP &nbsp;|&nbsp; ${t_act/tc_usd/1e6:.2f}M USD</div>
+          <div class="delta">Costo/trabajador: ${t_act/max(t_dot,1)/1e3:,.0f}K CLP</div>
+        </div>""", unsafe_allow_html=True)
+        rf2.markdown(f"""
+        <div class="metric-card">
+          <div class="label">Total recurrente nuevo / año</div>
+          <div class="value">${t_new/1e6:.2f}M CLP &nbsp;|&nbsp; ${t_new/tc_usd/1e6:.2f}M USD</div>
+          <div class="delta" style="color:{col_tot}">{sign_tot}${delta_tot/1e6:.2f}M vs. actual</div>
+        </div>""", unsafe_allow_html=True)
 
-        # CAGR final
-        cagr_final = cagr(t_act, t_act * factor_inc(anios, inc_real_pct), anios)
+        cagr_f = cagr(t_act, t_act * factor_inc(anios, inc_real_pct), anios)
         st.markdown(f"""
-        <div style="background:{AZUL};color:white;border-radius:10px;padding:16px 24px;margin-top:12px;display:flex;gap:40px;align-items:center">
-          <div><div style="font-size:11px;opacity:.75">CAGR Contrato Actual ({anios}a)</div>
-               <div style="font-size:22px;font-weight:700">{cagr_final:.2f}%</div></div>
-          <div><div style="font-size:11px;opacity:.75">Inc. Real pactado/año</div>
+        <div style="background:{AZUL};color:white;border-radius:10px;
+                    padding:16px 28px;margin-top:12px;
+                    display:flex;gap:40px;align-items:center;flex-wrap:wrap">
+          <div><div style="font-size:11px;opacity:.7">CAGR Contrato Actual ({anios}a)</div>
+               <div style="font-size:22px;font-weight:700">{cagr_f:.2f}%</div></div>
+          <div><div style="font-size:11px;opacity:.7">Inc. Real pactado / año</div>
                <div style="font-size:22px;font-weight:700">{inc_real_pct:.1f}%</div></div>
-          <div><div style="font-size:11px;opacity:.75">Período contrato</div>
+          <div><div style="font-size:11px;opacity:.7">Período contrato</div>
                <div style="font-size:22px;font-weight:700">36 meses</div></div>
-          <div><div style="font-size:11px;opacity:.75">TC USD/CLP (promedio 2025)</div>
+          <div><div style="font-size:11px;opacity:.7">TC USD (prom. 2025)</div>
                <div style="font-size:22px;font-weight:700">${tc_usd:,}</div></div>
-        </div>
-        """, unsafe_allow_html=True)
+          <div><div style="font-size:11px;opacity:.7">Total dotación</div>
+               <div style="font-size:22px;font-weight:700">{t_dot}</div></div>
+        </div>""", unsafe_allow_html=True)
 
 # ── Footer ──
 st.markdown(f"""
-<div style="margin-top:40px;padding:12px 0;border-top:2px solid #E5E7EB;text-align:center;font-size:11px;color:#9CA3AF">
+<div style="margin-top:40px;padding:12px 0;border-top:2px solid #E5E7EB;
+            text-align:center;font-size:11px;color:#9CA3AF">
   STCLE · Sindicato Tripulantes de Cabina LAN Express &nbsp;|&nbsp;
-  Modelo de costeo CC · Uso interno · {anios} años de vigencia proyectados
-</div>
-""", unsafe_allow_html=True)
+  Modelo de costeo CC · Uso interno · {anios} año(s) proyectados
+</div>""", unsafe_allow_html=True)
